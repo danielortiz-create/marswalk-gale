@@ -1,0 +1,4 @@
+node_modules
+dist
+raw
+tests/shots

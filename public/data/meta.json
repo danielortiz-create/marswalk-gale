@@ -1,0 +1,30 @@
+{
+ "size_m": 2048,
+ "mesh_n": 1024,
+ "nav_n": 512,
+ "elev_min": -3860.296142578125,
+ "elev_max": -3378.4296875,
+ "bounds_eqc": [
+  8142184,
+  -286033,
+  8144232,
+  -283985
+ ],
+ "center_lon": 137.38084444544273,
+ "center_lat": -4.80827422000656,
+ "slope_scale": 4.0,
+ "rough_max_m": 0.5,
+ "sources": {
+  "dem": "MSL Gale Merged DEM 1 m v3 — MRO HiRISE / USGS Astrogeology",
+  "ortho": "MSL Gale Orthophoto Mosaic 25 cm v3 — MRO HiRISE / USGS Astrogeology",
+  "thermal": "THEMIS IR Controlled Mosaics 100 m v2 — Mars Odyssey / NASA Mars Trek"
+ },
+ "thermal_night_range": [
+  131,
+  212
+ ],
+ "thermal_day_range": [
+  84,
+  233
+ ]
+}

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Marswalk Gale — planificador de caminatas en Monte Sharp</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body data-mode="plan">
+  <canvas id="view"></canvas>
+  <div id="labels"></div>
+  <div id="loading"><div><b>MARSWALK GALE</b><span id="loadmsg">Cargando terreno real de Marte…</span></div></div>
+
+  <!-- ===================== PLANIFICADOR ===================== -->
+  <header class="plan">
+    <div class="brand"><b>MARSWALK GALE</b><span>Monte Sharp · crestas <i>boxwork</i> · 4.81° S, 137.38° E</span></div>
+    <div class="actions">
+      <button id="btnAdd">＋ Añadir parada</button>
+      <button id="btnGlb">Exportar modelo 3D (GLB)</button>
+      <button id="btnHud" class="primary">Iniciar caminata · vista de casco ▶</button>
+    </div>
+  </header>
+
+  <aside id="left" class="plan panel">
+    <h2>Capas de datos</h2>
+    <div id="layers"></div>
+    <h2>Modelo de marcha <em>modelo</em></h2>
+    <label class="row">Pendiente máxima <output id="oSlopeMax"></output>
+      <input type="range" id="pSlope" min="15" max="30" step="1" /></label>
+    <label class="row">Aversión al riesgo <output id="oRisk"></output>
+      <input type="range" id="pRisk" min="0" max="3" step="0.5" /></label>
+    <label class="row">Minutos por parada <output id="oStop"></output>
+      <input type="range" id="pStop" min="5" max="60" step="5" /></label>
+    <p class="note">Objetivo científico: muestrear crestas y huecos <i>boxwork</i> para saber si el agua subterránea circuló aquí tarde en la historia de Marte.</p>
+  </aside>
+
+  <aside id="right" class="plan panel">
+    <h2>Presupuesto de la caminata <em>modelo</em></h2>
+    <div id="status"></div>
+    <div id="budget" class="grid"></div>
+    <h2>Paradas científicas</h2>
+    <div id="stops"></div>
+    <h2>Entorno</h2>
+    <div id="env"></div>
+  </aside>
+
+  <section id="profileBox" class="plan panel">
+    <div class="ptitle">Perfil de la ruta — elevación (color = pendiente) y oxígeno restante</div>
+    <canvas id="profile"></canvas>
+  </section>
+
+  <div id="photo" hidden>
+    <button id="photoClose">✕</button>
+    <div id="photoImgs"></div>
+    <div id="photoCap"></div>
+  </div>
+
+  <!-- ===================== HUD DE CASCO ===================== -->
+  <div id="hud" class="hud">
+    <div class="visor"></div>
+    <canvas id="compass" width="720" height="46"></canvas>
+    <div id="hudAlert"></div>
+    <div class="hbox hl">
+      <div class="hrow"><span>O₂</span><div class="bar"><i id="hO2bar"></i></div><b id="hO2"></b></div>
+      <div class="hrow"><span>MARGEN REGRESO</span><b id="hMargin"></b></div>
+      <div class="hrow"><span>TIEMPO EVA</span><b id="hTime"></b></div>
+      <div class="hrow"><span>HORA LOCAL</span><b id="hClock"></b></div>
+      <div class="hrow"><span>DOSIS</span><b id="hDose"></b></div>
+      <div class="hrow"><span>TEMP. AIRE</span><b id="hTemp"></b></div>
+    </div>
+    <div class="hbox hr">
+      <div class="hrow"><span>SIGUIENTE</span><b id="hNext"></b></div>
+      <div class="hrow"><span>DISTANCIA</span><b id="hNextD"></b></div>
+      <div class="hrow"><span>PENDIENTE</span><b id="hSlope"></b></div>
+      <div class="hrow"><span>ELEVACIÓN</span><b id="hElev"></b></div>
+      <div class="hrow"><span>RECORRIDO</span><b id="hDist"></b></div>
+      <div class="hrow"><span>REGRESO A PIE</span><b id="hBack"></b></div>
+    </div>
+    <div id="hudPhoto" hidden><img id="hudPhotoImg" alt="" /><div id="hudPhotoCap"></div></div>
+    <div class="hctl">
+      <button id="hPlay">⏸</button>
+      <input type="range" id="hScrub" min="0" max="1000" value="0" />
+      <select id="hSpeed"><option value="1">×1</option><option value="10">×10</option><option value="30" selected>×30</option><option value="120">×120</option></select>
+      <button id="hSep">Simular alerta solar</button>
+      <button id="hExit">Salir</button>
+    </div>
+    <div class="hint">Arrastra para mirar alrededor</div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
