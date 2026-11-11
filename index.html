@@ -12,42 +12,93 @@
   <div id="loading"><div><b>MARSWALK GALE</b><span id="loadmsg">Cargando terreno real de Marte…</span></div></div>
 
   <!-- ===================== PLANIFICADOR ===================== -->
-  <header class="plan">
-    <div class="brand"><b>MARSWALK GALE</b><span>Monte Sharp · crestas <i>boxwork</i> · 4.81° S, 137.38° E</span></div>
-    <div class="actions">
-      <button id="btnAdd">＋ Añadir parada</button>
-      <button id="btnGlb">Exportar modelo 3D (GLB)</button>
-      <button id="btnHud" class="primary">Iniciar caminata · vista de casco ▶</button>
+  <div id="app" class="plan">
+    <header>
+      <div class="brand"><b>MARSWALK GALE</b><span>Monte Sharp · cráter Gale</span></div>
+      <div class="actions">
+        <button id="btnAdd">＋ Añadir parada</button>
+        <button id="btnGlb">Exportar modelo 3D (GLB)</button>
+        <button id="btnHud" class="primary">Vista de casco ▶</button>
+      </div>
+    </header>
+
+    <!-- Franja de resumen de la misión -->
+    <div id="strip">
+      <div class="sitem"><span class="ico">⌖</span><b id="sStops">–</b></div>
+      <div class="sitem"><span class="ico">↔</span>Distancia <b id="sDist">–</b></div>
+      <div class="sitem"><span class="ico">◷</span>Duración <b id="sTime">–</b></div>
+      <div class="sitem"><span class="ico">↩</span><span id="sBackLbl">Regreso máx.</span> <b id="sBack">–</b></div>
+      <div class="sitem"><span class="ico">O₂</span>al llegar <b id="sO2">–</b></div>
+      <div class="sitem"><span id="sState" class="chip">–</span></div>
     </div>
-  </header>
 
-  <aside id="left" class="plan panel">
-    <h2>Capas de datos</h2>
-    <div id="layers"></div>
-    <h2>Modelo de marcha <em>modelo</em></h2>
-    <label class="row">Pendiente máxima <output id="oSlopeMax"></output>
-      <input type="range" id="pSlope" min="15" max="30" step="1" /></label>
-    <label class="row">Aversión al riesgo <output id="oRisk"></output>
-      <input type="range" id="pRisk" min="0" max="3" step="0.5" /></label>
-    <label class="row">Minutos por parada <output id="oStop"></output>
-      <input type="range" id="pStop" min="5" max="60" step="5" /></label>
-    <p class="note">Objetivo científico: muestrear crestas y huecos <i>boxwork</i> para saber si el agua subterránea circuló aquí tarde en la historia de Marte.</p>
-  </aside>
+    <aside id="left" class="panel">
+      <h2>Capas de datos</h2>
+      <div id="layers"></div>
+      <details id="more">
+        <summary>Más capas y ajustes</summary>
+        <div id="layersMore"></div>
+        <h2>Modelo de marcha <em class="mod">Modelo</em></h2>
+        <label class="row">Pendiente máxima <output id="oSlopeMax"></output>
+          <input type="range" id="pSlope" min="15" max="30" step="1" /></label>
+        <label class="row">Aversión al riesgo <output id="oRisk"></output>
+          <input type="range" id="pRisk" min="0" max="3" step="0.5" /></label>
+        <label class="row">Minutos por parada <output id="oStop"></output>
+          <input type="range" id="pStop" min="5" max="60" step="5" /></label>
+        <label class="row">Reserva mínima de O₂ al llegar <output id="oRes"></output>
+          <input type="range" id="pRes" min="0" max="90" step="5" /></label>
+      </details>
+    </aside>
 
-  <aside id="right" class="plan panel">
-    <h2>Presupuesto de la caminata <em>modelo</em></h2>
-    <div id="status"></div>
-    <div id="budget" class="grid"></div>
-    <h2>Paradas científicas</h2>
-    <div id="stops"></div>
-    <h2>Entorno</h2>
-    <div id="env"></div>
-  </aside>
+    <main id="mapCell">
+      <div id="legend">
+        <div><i class="ln solid"></i>Ruta original</div>
+        <div id="legBack" hidden><i class="ln dash"></i>Regreso al hábitat</div>
+        <div><i class="ln white"></i>Recorrido de Curiosity</div>
+      </div>
+      <section id="profileBox">
+        <div class="ptitle">Perfil de la ruta — elevación (color = pendiente) y oxígeno restante</div>
+        <canvas id="profile"></canvas>
+      </section>
+    </main>
 
-  <section id="profileBox" class="plan panel">
-    <div class="ptitle">Perfil de la ruta — elevación (color = pendiente) y oxígeno restante</div>
-    <canvas id="profile"></canvas>
-  </section>
+    <aside id="right" class="panel">
+      <div class="tabs">
+        <button data-tab="tars" class="on">TARS</button>
+        <button data-tab="stops">Paradas</button>
+        <button data-tab="env">Entorno</button>
+      </div>
+
+      <div class="tab" id="tab-tars">
+        <h2>Agente de misión · TARS</h2>
+        <div id="tarsState" class="tstate"></div>
+        <div id="evChip" class="evchip" hidden>☀ Evento solar simulado</div>
+        <button id="btnSolar" class="outline">Simular evento solar</button>
+        <div id="chat"></div>
+        <div id="quick"></div>
+        <form id="tarsForm">
+          <input id="tarsIn" type="text" placeholder="Pídele algo a TARS…" autocomplete="off" />
+          <button type="button" id="tarsMic" title="Hablar">🎙</button>
+          <button type="submit">Enviar</button>
+        </form>
+        <button id="btnBack" class="primary wide" hidden>Ver ruta de regreso</button>
+        <div id="stopCard"></div>
+      </div>
+
+      <div class="tab" id="tab-stops" hidden>
+        <h2>Presupuesto de la caminata <em class="mod">Modelo</em></h2>
+        <div id="status"></div>
+        <div id="budget" class="grid"></div>
+        <h2>Paradas científicas</h2>
+        <div id="stops"></div>
+      </div>
+
+      <div class="tab" id="tab-env" hidden>
+        <h2>Entorno</h2>
+        <div id="env"></div>
+      </div>
+    </aside>
+  </div>
 
   <div id="photo" hidden>
     <button id="photoClose">✕</button>
@@ -77,6 +128,18 @@
       <div class="hrow"><span>REGRESO A PIE</span><b id="hBack"></b></div>
     </div>
     <div id="hudPhoto" hidden><img id="hudPhotoImg" alt="" /><div id="hudPhotoCap"></div></div>
+
+    <!-- TARS por voz -->
+    <div id="hudTars">
+      <div class="htitle">TARS <span id="hTarsState"></span></div>
+      <div id="hTarsYou"></div>
+      <div id="hTarsSay">Mantén pulsado el botón o la tecla V y pregunta.</div>
+      <div class="hrowbtn">
+        <button id="hMic">🎙 Hablar con TARS</button>
+        <form id="hTarsForm"><input id="hTarsIn" type="text" placeholder="o escribe aquí…" autocomplete="off" /></form>
+      </div>
+    </div>
+
     <div class="hctl">
       <button id="hPlay">⏸</button>
       <input type="range" id="hScrub" min="0" max="1000" value="0" />
@@ -84,7 +147,6 @@
       <button id="hSep">Simular alerta solar</button>
       <button id="hExit">Salir</button>
     </div>
-    <div class="hint">Arrastra para mirar alrededor</div>
   </div>
 
   <script type="module" src="./src/main.js"></script>

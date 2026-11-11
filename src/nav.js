@@ -18,6 +18,7 @@ export const P = {
   o2PerMJ: 0.0711,     // kg de O2 por MJ metabolico (1 L O2 = 20.1 kJ)
   o2TankKg: 0.55,      // O2 utilizable del sistema primario
   o2ReserveMin: 30,    // reserva minima exigida (minutos a ritmo de marcha)
+  o2ReservePct: 0,     // % minimo de O2 que debe quedar al volver al habitat (0 = sin exigencia)
   stopMinutes: 20,     // minutos de ciencia por parada
 };
 
@@ -126,10 +127,19 @@ export async function createNav(meta, terrain) {
     return out;
   }
 
+  // Memoria de campos Dijkstra ya calculados (se vacia si cambian los parametros de marcha)
+  let cacheSig = ''; const cache = new Map();
+  function fieldFor(c) {
+    const sig = [P.vFlat, P.maxCellSlope, P.maxDirSlope, P.risk].join('|');
+    if (sig !== cacheSig) { cache.clear(); cacheSig = sig; }
+    if (!cache.has(c)) cache.set(c, dijkstra(c));
+    return cache.get(c);
+  }
+
   // Planifica la caminata: habitat -> paradas (en el mejor orden) -> habitat.
   function planRoute(habitat, stops) {
     const nodes = [habitat, ...stops].map((s) => cellOf(s.x, s.z));
-    const fields = nodes.map((c) => dijkstra(c));
+    const fields = nodes.map((c) => fieldFor(c));
     const m = nodes.length;
     const C = (i, j) => fields[i].cost[nodes[j]];
     // mejor orden: fuerza bruta hasta 7 paradas; si hay mas, vecino mas cercano
@@ -218,7 +228,32 @@ export async function createNav(meta, terrain) {
     const last = pts[pts.length - 1];
     return { pts, total: { time: last.t, dist: last.dist, o2: last.o2, energy: last.energy,
       dose: last.dose, up, down, minMargin, noReturn,
-      o2Left: P.o2TankKg - last.o2, maxBack: Math.max(...pts.map((p) => p.back)) } };
+      o2Left: P.o2TankKg - last.o2, o2LeftPct: (1 - last.o2 / P.o2TankKg) * 100,
+      maxBack: Math.max(...pts.map((p) => p.back)) } };
+  }
+
+  // Planifica cumpliendo la reserva minima de O2 al llegar (P.o2ReservePct).
+  // Si el plan completo no la cumple, quita paradas de una en una (siempre la que
+  // mas oxigeno ahorra) hasta cumplirla. Devuelve tambien las paradas omitidas.
+  function planWithReserve(habitat, stops, doseRate, backField) {
+    let active = stops.slice();
+    const omitted = [];
+    for (;;) {
+      const plan = active.length ? planRoute(habitat, active) : null;
+      const tl = plan ? buildTimeline(plan.legs, doseRate, backField) : null;
+      if (!tl || tl.total.o2LeftPct >= P.o2ReservePct || active.length <= 1) return { plan, tl, omitted };
+      let best = null;
+      for (const s of active) {
+        const rest = active.filter((k) => k !== s);
+        const p2 = planRoute(habitat, rest);
+        if (!p2) continue;
+        const left = buildTimeline(p2.legs, doseRate, backField).total.o2LeftPct;
+        if (!best || left > best.left) best = { s, left };
+      }
+      if (!best) return { plan, tl, omitted };
+      omitted.push(best.s);
+      active = active.filter((k) => k !== best.s);
+    }
   }
 
   // Estado interpolado en el instante t de la linea de tiempo
@@ -235,5 +270,5 @@ export async function createNav(meta, terrain) {
       dwell: b.depart || null, stepSlope: Math.atan2(b.y - a.y, Math.hypot(b.x - a.x, b.z - a.z) || 1) * 57.2958 };
   }
 
-  return { n, cell, S, R, H, cellOf, posOf, dijkstra, pathBack, planRoute, buildTimeline, sample };
+  return { n, cell, S, R, H, cellOf, posOf, dijkstra, pathBack, planRoute, planWithReserve, buildTimeline, sample };
 }

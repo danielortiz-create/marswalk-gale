@@ -11,5 +11,8 @@
   "dependencies": {
     "three": "^0.187.0",
     "vite": "^8.3.7"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "^1.8.0"
   }
 }
