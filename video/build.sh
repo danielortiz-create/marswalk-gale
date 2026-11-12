@@ -8,7 +8,7 @@ mkdir -p out
 # Los fotogramas se capturaron a 15 por segundo; el video sale a 30 (cada uno se repite).
 ffmpeg -y -loglevel error -framerate 15 -i frames/f%05d.jpg -i out/music.wav \
   -vf "fps=30,fade=t=in:st=0:d=0.8,fade=t=out:st=79:d=1,format=yuv420p" \
-  -c:v libx264 -preset slow -crf 18 -c:a aac -b:a 192k -shortest -movflags +faststart \
+  -c:v libx264 -preset slow -crf 23 -c:a aac -b:a 192k -shortest -movflags +faststart \
   out/marswalk-gale-intro.mp4
 
 # Subtitulos aparte (ya van dibujados en el video; este archivo sirve para YouTube u otros)
