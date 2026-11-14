@@ -1,0 +1,10 @@
+[
+  { "shot": 1, "start": 0,  "end": 6,  "text": "Marswalk Gale. One map for walking on Mars." },
+  { "shot": 2, "start": 6,  "end": 14, "text": "Real terrain of Mount Sharp, two kilometers wide, with the path Curiosity actually drove." },
+  { "shot": 3, "start": 14, "end": 26, "text": "Toggle layers. Slope, derived from HiRISE elevation. Night thermal from Mars Odyssey. And a modeled walk back time to the habitat." },
+  { "shot": 4, "start": 26, "end": 38, "text": "It orders the science stops and finds the safest path around steep slopes. Switch a stop off, and the plan updates at once." },
+  { "shot": 5, "start": 38, "end": 48, "text": "A solar event. The fastest route back to the habitat appears instantly." },
+  { "shot": 6, "start": 48, "end": 58, "text": "Ask TARS for a seventy-five percent oxygen reserve. It drops one stop and replans the walk." },
+  { "shot": 7, "start": 58, "end": 72, "text": "Step into the helmet view. Heading, oxygen and return margin stay in sight. At the stop, see a real Curiosity Navcam photo taken from that spot." },
+  { "shot": 8, "start": 72, "end": 80, "text": "Observation, derived, or model. Oxygen and timing are estimates, never measurements. Marswalk Gale." }
+]
