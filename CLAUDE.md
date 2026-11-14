@@ -27,3 +27,11 @@ App web 3D (Vite + Three.js, JavaScript sin frameworks) para planear una caminat
 - Una herramienta nueva de TARS se define en `server/tars-proxy.js` y se implementa en `runTool` de `src/main.js`.
 - Mundo en metros: x = este, z = sur, y = arriba; y es relativa a la elevación del hábitat.
 - Subir a `main` publica solo en GitHub Pages (`.github/workflows/deploy.yml`).
+
+## Estado actual
+
+- Hecho: datos reales, planificador 3D, vista de casco, TARS con IA y voz, página en GitHub Pages, vídeo de presentación (`video/`, ver `build.sh`).
+- Sin probar con clave real: la IA de TARS y el micrófono (se probaron con un servidor simulado).
+- Pendiente: voz del vídeo. Guion en `video/narration.json`; `video/voice.py` usa el motor Kokoro (hay que descargar los archivos de voz en `video/voices/`, ver el encabezado del script).
+- Ideas sin decidir: bienvenida guiada, lectura bajo el cursor, versión tablet, botón ES/EN, paleta para daltonismo.
+- Usuario: principiante, habla español, quiere respuestas cortas. Trabaja ahora en su PC (clave en `.env.local`).
