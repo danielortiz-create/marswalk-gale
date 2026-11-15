@@ -87,16 +87,18 @@ npm run build
 
 ## NASA data used
 
-| Type | Data | Mission / source |
-|---|---|---|
-| Topographic | MSL Gale Merged DEM, 1 m/pixel, v3 | MRO HiRISE · USGS Astrogeology |
-| Optical | MSL Gale Orthophoto Mosaic, 25 cm/pixel, v3 | MRO HiRISE · USGS Astrogeology |
-| Thermal | THEMIS IR Controlled Mosaics, day and night, 100 m/pixel | Mars Odyssey · NASA Mars Trek |
-| Atmospheric | Temperature, pressure, UV and opacity per sol | Curiosity REMS (NASA/JPL-Caltech/CAB) |
-| Radiation | Surface dose 0.64 ± 0.12 mSv/day | Curiosity RAD · Hassler et al. 2014, *Science* |
-| Space weather | CME, flare and storm notifications | NASA CCMC DONKI |
-| Images | Raw Navcam photos per sol | Curiosity · mars.nasa.gov |
-| Traverse | Rover positions per sol | Curiosity · MMGIS waypoints |
+| Type | Data | Mission / source | Amount used in the app |
+|---|---|---|---|
+| Topographic | MSL Gale Merged DEM, 1 m/pixel, v3 | MRO HiRISE (orbiter) · USGS Astrogeology | 1,048,576 elevation points (1024 × 1024 grid, one every 2 m) |
+| Optical | MSL Gale Orthophoto Mosaic, 25 cm/pixel, v3 | MRO HiRISE (orbiter) · USGS Astrogeology | 16.8 million pixels (one 4096 × 4096 image) |
+| Thermal | THEMIS IR Controlled Mosaics, day and night, 100 m/pixel | Mars Odyssey (orbiter) · NASA Mars Trek | 2 mosaics (day and night), 25 × 25 pixels each over the area (Mars Trek tiles at about 81 m/pixel) |
+| Atmospheric | Temperature, pressure, UV and opacity per sol | Curiosity REMS (NASA/JPL-Caltech/CAB) | 90 sols of readings |
+| Radiation | Surface dose 0.64 ± 0.12 mSv/day | Curiosity RAD · Hassler et al. 2014, *Science* | 1 published value |
+| Space weather | CME, flare and storm notifications | NASA CCMC DONKI | 33 notifications |
+| Images | Raw Navcam photos per sol | Curiosity · mars.nasa.gov | 10 photos at the stops |
+| Traverse | Rover positions per sol | Curiosity · MMGIS waypoints | 150 positions |
+
+From the elevation model the app also derives slope and roughness for 262,144 navigation cells (512 × 512 grid, 4 m each). In total the app loads about 22 MB of data: three products from two orbiters (MRO and Mars Odyssey), four datasets from the Curiosity rover, and DONKI space weather.
 
 ## What is data and what is model
 
