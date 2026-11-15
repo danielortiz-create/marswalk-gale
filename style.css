@@ -18,7 +18,7 @@ button.wide, button.outline { width: 100%; margin: 6px 0; }
 button.on { outline: 2px solid var(--cyan); }
 em { font-style: normal; font-size: 9.5px; letter-spacing: .03em; color: #0c1f12; background: var(--ok);
   border-radius: 4px; padding: 1px 6px; vertical-align: middle; white-space: nowrap; }
-em.der { background: #8fd0a8; } em.mod { background: var(--warn); color: #241a02; }
+em.der { background: #8fd0a8; } em.prop { background: var(--cyan); color: #04222c; } em.mod { background: var(--warn); color: #241a02; }
 
 #loading { position: fixed; inset: 0; background: #07090c; z-index: 50; display: grid; place-items: center; text-align: center; }
 #loading b { display: block; font-size: 26px; letter-spacing: .25em; color: var(--accent); margin-bottom: 10px; }
@@ -26,10 +26,12 @@ em.der { background: #8fd0a8; } em.mod { background: var(--warn); color: #241a02
 
 body[data-mode="hud"] .plan { display: none !important; }
 body[data-mode="plan"] .hud { display: none; }
+body[data-mode="intro"] .plan, body[data-mode="intro"] .hud { display: none !important; }
+body:not([data-mode="intro"]) #intro { display: none; }
 
 /* ---------------- Rejilla del planificador ---------------- */
 #app { position: fixed; inset: 0; display: grid; gap: 8px; padding: 0 8px 8px; pointer-events: none;
-  grid-template-columns: 300px minmax(0, 1fr) 340px; grid-template-rows: 50px 44px minmax(0, 1fr);
+  grid-template-columns: var(--lw, 300px) minmax(0, 1fr) var(--rw, 340px); grid-template-rows: 50px 44px minmax(0, 1fr);
   grid-template-areas: "head head head" "strip strip strip" "left map right"; z-index: 4; }
 #app > * { pointer-events: auto; }
 header { grid-area: head; display: flex; align-items: center; justify-content: space-between; margin: 0 -8px; padding: 0 14px;
@@ -51,12 +53,23 @@ header { grid-area: head; display: flex; align-items: center; justify-content: s
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow-y: auto; padding: 4px 12px 10px; min-height: 0; }
 #left { grid-area: left; } #right { grid-area: right; }
+/* Tarjetas plegables: la flecha oculta la tarjeta y deja mas sitio al mapa */
+.fold { float: right; position: sticky; top: 4px; z-index: 2; padding: 1px 7px; margin: 6px 0 0 6px; font-size: 11px; line-height: 1.5; color: var(--dim); }
+#app.noleft { --lw: 34px; } #app.noright { --rw: 34px; }
+#app.noleft #left, #app.noright #right { padding: 0 3px; overflow: hidden; }
+#app.noleft #left > *:not(.fold), #app.noright #right > *:not(.fold) { display: none !important; }
+#app.noleft #left .fold, #app.noright #right .fold { float: none; margin: 6px 0 0; }
+#mapCell.noprof #profileBox { height: 34px; } #mapCell.noprof #profile { display: none; }
+#mapCell.noprof #legend { bottom: 52px; }
+.ptitle .fold { margin: 0 0 0 6px; }
 #mapCell { grid-area: map; position: relative; pointer-events: none !important; min-height: 0; }
 #mapCell > * { pointer-events: auto; }
 #profileBox { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 140px; padding: 6px 10px; z-index: 5;
   background: #0e1014; border: 1px solid var(--line); border-radius: 10px; }
 #profile { width: 100%; height: 108px; display: block; }
 .ptitle { color: var(--dim); font-size: 11px; }
+/* Lo marcado como "hidden" en el HTML no se muestra, aunque otra regla le ponga display */
+[hidden] { display: none !important; }
 #legend { position: absolute; left: 10px; bottom: 158px; padding: 7px 10px; z-index: 5; background: #0e1014;
   border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
 #legend div { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
@@ -107,6 +120,9 @@ details#more summary { cursor: pointer; color: var(--accent); padding: 6px 0; }
 #stopCard h3 { margin: 0 0 2px; font-size: 15px; }
 #stopCard h3::before { content: "⌖ "; color: var(--accent); }
 #stopCard p { margin: 0 0 6px; color: var(--dim); font-size: 11.5px; }
+#stopCard .sci { margin: 4px 0 8px; padding: 7px 9px; border-radius: 8px; background: rgba(79,216,255,.07); border: 1px solid rgba(79,216,255,.3); }
+#stopCard .sci p { color: var(--txt); margin: 4px 0 0; }
+#stopCard .sci .task { color: var(--cyan); } #stopCard .sci .rel { color: var(--dim); font-size: 10.5px; }
 #stopCard .ph { position: relative; cursor: pointer; }
 #stopCard img { width: 100%; border-radius: 8px; display: block; }
 #stopCard .cap { position: absolute; left: 6px; bottom: 6px; background: rgba(8,10,12,.8); padding: 2px 7px; border-radius: 4px; font-size: 11px; }
@@ -160,6 +176,8 @@ details#more summary { cursor: pointer; color: var(--accent); padding: 6px 0; }
 .hbox { position: absolute; top: 90px; width: 250px; padding: 10px 12px; background: rgba(4,14,20,.5);
   border: 1px solid rgba(79,216,255,.4); border-radius: 8px; }
 .hl { left: 4vw; } .hr { right: 4vw; }
+.hsalud { top: 296px; }
+#hTarsTip { color: var(--warn); font-size: 12.5px; font-family: system-ui, sans-serif; margin-top: 4px; min-height: 1.2em; }
 .hrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; font-size: 12px; }
 .hrow span { opacity: .75; font-size: 10.5px; letter-spacing: .08em; }
 .hrow b { font-size: 14px; color: #eafaff; }
@@ -190,3 +208,32 @@ details#more summary { cursor: pointer; color: var(--accent); padding: 6px 0; }
   font-family: ui-monospace, Menlo, Consolas, monospace; text-shadow: 0 0 5px #000; pointer-events: none; }
 .ar::after { content: "▼"; display: block; font-size: 14px; }
 .ar.hab { color: var(--accent); }
+
+/* ---------------- Introducción ---------------- */
+#intro { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+#intro > * { pointer-events: auto; }
+.itop { position: absolute; top: 16px; right: 18px; display: flex; gap: 10px; align-items: center; }
+.ilang { display: flex; }
+.ilang button { border-radius: 0; padding: 5px 11px; font-weight: 700; }
+.ilang button:first-child { border-radius: 6px 0 0 6px; } .ilang button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+.ilang button.on { background: var(--accent); color: #1a0d04; border-color: var(--accent); }
+#iSkip { background: rgba(8,10,14,.7); }
+#introCard { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(720px, 92vw); text-align: center;
+  padding: 34px 30px 30px; background: rgba(8,10,14,.82); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+#introCard .k { font-weight: 700; font-size: 12px; letter-spacing: .3em; color: var(--accent); }
+#introCard h1 { font-size: clamp(34px, 6vw, 62px); letter-spacing: .06em; margin: 10px 0 8px; line-height: 1; }
+#introCard p { font-size: clamp(15px, 2vw, 19px); color: #e8dccf; margin: 0 0 22px; }
+#iStart { font-size: 16px; padding: 10px 26px; }
+#introSub { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); width: min(880px, 92vw); display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px; background: rgba(8,10,14,.86); border: 1px solid var(--line); border-radius: 12px; }
+#introSub b { font-size: 11px; letter-spacing: .14em; color: var(--cyan); white-space: nowrap; }
+#introSub span { flex: 1; font-size: clamp(15px, 2vw, 20px); line-height: 1.35; }
+/* subtitulo del dialogo simulado en la vista de casco */
+#hSub { position: absolute; left: 50%; top: 56%; transform: translateX(-50%); width: min(620px, 44vw); display: flex; gap: 12px; align-items: baseline;
+  padding: 10px 14px; background: rgba(4,14,20,.8); border: 1px solid rgba(79,216,255,.35); border-radius: 10px; font-family: system-ui, sans-serif; }
+#hSub b { font-size: 11px; letter-spacing: .14em; color: var(--cyan); white-space: nowrap; }
+#hSub b.ev1 { color: #ff8a3d; }
+#hSub span { flex: 1; font-size: clamp(14px, 1.6vw, 18px); line-height: 1.35; color: #fff; }
+#hO2 small { font-size: 9px; color: var(--warn); margin-left: 3px; }
+#introFade { position: absolute; inset: 0; background: #07090c; opacity: 0; pointer-events: none !important; transition: opacity .45s; }
+#introFade.on { opacity: 1; }

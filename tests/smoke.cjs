@@ -1,17 +1,16 @@
 // Prueba de humo en navegador: pantalla de entrada, plan, reserva de O2, evento solar,
-// TARS (sin IA y con un servidor SIMULADO solo para esta prueba) y vista de casco.
+// TARS simulado (respuestas locales) y vista de casco con el dialogo simulado.
 const { chromium } = require('playwright');
 const OUT = process.env.SHOTS || 'tests/shots';
-const URL = process.env.URL || 'http://localhost:5173/?malla=4&px=1';
+const URL = process.env.URL || 'http://localhost:5173/?malla=4&px=1&intro=0&lang=es';
 require('fs').mkdirSync(OUT, { recursive: true });
 const ok = (c, m) => { console.log((c ? 'OK   ' : 'FALLO ') + m); if (!c) process.exitCode = 1; };
 
-async function open(b, mock) {
+async function open(b) {
   const p = await b.newPage({ viewport: { width: 1672, height: 941 } });
   p.errs = [];
   p.on('console', (m) => { if (m.type() === 'error' && !/api\.nasa\.gov|ERR_|Failed to load resource/.test(m.text())) p.errs.push(m.text()); });
   p.on('pageerror', (e) => p.errs.push('PAGEERROR ' + e.message));
-  if (mock) await p.route('**/api/tars', mock);
   await p.goto(URL);
   await p.waitForFunction(() => window.APP && window.APP.tl !== undefined && !document.getElementById('loading'), null, { timeout: 180000 });
   await p.waitForTimeout(1200);
@@ -21,10 +20,10 @@ async function open(b, mock) {
 (async () => {
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 
-  // ---------- 1. Sin IA ----------
+  // ---------- 1. Planificador ----------
   let p = await open(b);
   const txt = (id) => p.evaluate((i) => document.getElementById(i).textContent, id);
-  ok(/Sin IA/.test(await txt('tarsState')), 'sin clave: TARS en modo básico');
+  ok(/TARS simulado/.test(await txt('tarsState')), 'TARS simulado');
   ok((await txt('sStops')) === '5 de 5 paradas activas', 'franja: ' + await txt('sStops'));
   console.log('     franja:', await txt('sDist'), '|', await txt('sTime'), '|', await txt('sBack'), '|', await txt('sO2'), '|', await txt('sState'));
   const box = await p.evaluate(() => { const r = document.getElementById('right').getBoundingClientRect(); return [Math.round(r.right), innerWidth, Math.round(r.bottom), innerHeight]; });
@@ -55,49 +54,24 @@ async function open(b, mock) {
   await p.click('.tabs button[data-tab=env]'); await p.waitForTimeout(300); await p.screenshot({ path: OUT + '/6-entorno.png' });
   await p.evaluate(() => { document.getElementById('more').open = true; });
   await p.locator('#layers .layer > label > input').nth(2).check(); await p.waitForTimeout(600); await p.screenshot({ path: OUT + '/7-pendiente.png' });
-  ok(p.errs.length === 0, 'sin errores de consola (sin IA) ' + p.errs.slice(0, 3));
-  await p.close();
+  await p.fill('#tarsIn', 'reserva 75 %'); await p.press('#tarsIn', 'Enter'); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => window.APP.omitted.length > 0), 'texto libre: reserva 75 % aplicada');
+  await p.locator('#quick button', { hasText: 'Sin reserva' }).click(); await p.waitForTimeout(1200);
 
-  // ---------- 2. Con IA simulada (formato de la API de mensajes) ----------
-  const posts = [];
-  const script = [
-    { content: [{ type: 'tool_use', id: 'toolu_1', name: 'fijar_reserva_o2', input: { porcentaje: 75 } }], stop_reason: 'tool_use' },
-    { content: [{ type: 'text', text: 'Respuesta simulada de prueba: reserva aplicada.' }], stop_reason: 'end_turn' },
-    { content: [{ type: 'tool_use', id: 'toolu_2', name: 'estado_mision', input: {} }, { type: 'tool_use', id: 'toolu_3', name: 'entorno', input: {} }], stop_reason: 'tool_use' },
-    { content: [{ type: 'text', text: 'Respuesta simulada de prueba: lecturas del casco.' }], stop_reason: 'end_turn' },
-  ];
-  p = await open(b, async (route) => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { ok: true, model: 'claude-opus-5-5' } });
-    posts.push(JSON.parse(route.request().postData()));
-    return route.fulfill({ json: { ...script[posts.length - 1], model: 'claude-opus-5-5' } });
-  });
-  ok(/IA conectada/.test(await p.evaluate(() => document.getElementById('tarsState').textContent)), 'con servidor: IA conectada');
-  await p.fill('#tarsIn', 'Replanifica con una reserva mínima de 75 % de O₂.'); await p.press('#tarsIn', 'Enter');
-  await p.waitForFunction(() => /simulada/.test([...document.querySelectorAll('#chat .msg.tars .txt')].pop().textContent), null, { timeout: 30000 });
-  const m2 = posts[1].messages;
-  const tr = m2[m2.length - 1];
-  ok(posts.length === 2 && tr.role === 'user' && tr.content[0].type === 'tool_result' && tr.content[0].tool_use_id === 'toolu_1', 'el resultado de la herramienta vuelve con su id');
-  ok(m2[m2.length - 2].role === 'assistant' && m2[m2.length - 2].content[0].type === 'tool_use', 'el turno del asistente se reenvía tal cual');
-  const res = JSON.parse(tr.content[0].content);
-  ok(res.omitidas.length > 0 && res.o2_al_llegar_pct >= 75, `herramienta ejecutada de verdad: omitidas ${res.omitidas.join(', ')}, O₂ ${res.o2_al_llegar_pct} %`);
-  await p.screenshot({ path: OUT + '/8-tars-ia.png' });
-
-  // ---------- 3. Casco: pregunta a TARS (texto; el micrófono no existe en este navegador) ----------
+  // ---------- 2. Casco: dialogo simulado y pregunta a TARS por texto ----------
   await p.click('#btnHud'); await p.waitForTimeout(600);
   await p.evaluate(() => { window.APP.H.playing = false; window.APP.H.t = 900; }); await p.waitForTimeout(700);
-  await p.fill('#hTarsIn', '¿Cuánto oxígeno me queda y qué temperatura hace?'); await p.press('#hTarsIn', 'Enter');
-  await p.waitForFunction(() => /simulada/.test(document.getElementById('hTarsSay').textContent), null, { timeout: 30000 });
-  const m4 = posts[3].messages, tr4 = m4[m4.length - 1];
-  ok(tr4.content.length === 2 && tr4.content.every((c) => c.type === 'tool_result'), 'dos herramientas en paralelo: resultados en un solo mensaje');
-  const st = JSON.parse(tr4.content[0].content);
-  ok(st.modo === 'casco' && st.casco && st.casco.o2_restante_pct > 0, `estado en casco: O₂ ${st.casco.o2_restante_pct} %, siguiente ${st.casco.siguiente}`);
+  await p.fill('#hTarsIn', '¿Cuál es el estado?'); await p.press('#hTarsIn', 'Enter');
+  await p.waitForFunction(() => /Oxígeno/.test(document.getElementById('hTarsSay').textContent), null, { timeout: 10000 });
+  await p.evaluate(() => { window.APP.H.playing = true; }); await p.waitForTimeout(3000);
+  ok(await p.evaluate(() => !document.getElementById('hSub').hidden && /TARS/.test(document.getElementById('hSubWho').textContent)), 'el dialogo simulado empieza con TARS');
   await p.screenshot({ path: OUT + '/9-casco-tars.png' });
-  const back = await p.evaluate(() => window.APP.H && document.getElementById('hSep').click() || window.APP.sep);
+  await p.click('#hSep');
   await p.waitForTimeout(600);
   ok(await p.evaluate(() => window.APP.sep && window.APP.returning), 'alerta solar en casco recalcula el regreso');
   await p.screenshot({ path: OUT + '/10-casco-alerta.png' });
   await p.click('#hExit'); await p.waitForTimeout(500);
   ok(await p.evaluate(() => document.body.dataset.mode === 'plan'), 'salir del casco vuelve al planificador');
-  ok(p.errs.length === 0, 'sin errores de consola (con IA simulada) ' + p.errs.slice(0, 3));
+  ok(p.errs.length === 0, 'sin errores de consola ' + p.errs.slice(0, 3));
   await b.close();
 })().catch((e) => { console.error('FALLO', e); process.exit(1); });

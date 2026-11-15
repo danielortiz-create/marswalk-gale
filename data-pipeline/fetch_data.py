@@ -62,7 +62,6 @@ def main():
         prof.update(width=dem.shape[1], height=dem.shape[0],
                     transform=src.window_transform(win), compress="deflate",
                     tiled=True, blockxsize=256, blockysize=256)
-        prof.pop("blockxsize", None) if False else None
         with rasterio.open(os.path.join(RAW, "dem.tif"), "w", **prof) as dst:
             dst.write(dem, 1)
     valid = dem[dem > -30000]

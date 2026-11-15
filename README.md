@@ -20,34 +20,45 @@ Para generar el sitio estático publicable (carpeta `dist/`):
 npm run build
 ```
 
-## TARS, el agente de misión (IA)
+## TARS, el agente de IA del traje
 
-TARS es un agente con IA (Claude Opus 5.5) que responde preguntas sobre la misión y cambia el plan cuando se lo pides: «Replanifica con una reserva mínima de 30 % de O₂», «¿cuánto oxígeno me queda?», «simula un evento solar en Boxwork 3».
+En la misión que imaginamos, TARS es un agente de IA local que corre en el propio traje: da indicaciones al astronauta mientras camina y vigila su salud, sin depender de la Tierra.
 
-Para activarlo en tu computadora:
+En esta demostración **TARS es una simulación**: no hay IA, ni conexión, ni clave de API. Todo funciona dentro del navegador, también en GitHub Pages.
 
-1. Copia `.env.example` como `.env.local`.
-2. Pon tu clave de la API de Claude después de `ANTHROPIC_API_KEY=`.
-3. Arranca con `npm run dev`. En el panel de TARS debe aparecer «IA conectada».
-
-La clave se queda en tu equipo: `.env.local` no se sube a GitHub y solo la usa el servidor local (`server/tars-proxy.js`); nunca llega al navegador. Cada pregunta a TARS consume uso de tu cuenta de la API.
-
-En la página pública de GitHub Pages no hay servidor ni clave, así que TARS funciona en modo básico: órdenes rápidas y palabras clave, sin IA.
+- **Diálogo simulado en la vista de casco (en inglés):** TARS habla con el astronauta (EV1), con dos voces distintas y subtítulos. Le pregunta cómo se siente cuando sube el pulso, le avisa de las pendientes de 10° o más en los próximos 40 m, le dice cuánto falta por recorrer y le acompaña en cada parada. Empieza al 99 % de oxígeno y vuelve a hablar al 95, 80, 70 y 60 %. Mientras hablan, la caminata baja a ×1. Guion en `src/tars-dialog.js`.
+- **Oxígeno de demostración:** en el casco el oxígeno baja deprisa (1 % cada 2 s, y se detiene mientras hablan) para que el público lo vea, y lleva la etiqueta «SIM». No es la estimación del modelo, que sigue en el planificador.
+- **Salud del astronauta (simulada):** pulso, respiración, temperatura corporal y esfuerzo. No hay sensores reales: son un modelo calculado a partir del esfuerzo de la ruta (`src/health.js`) y van etiquetados como «Modelo».
+- **Órdenes en el planificador:** botones rápidos o palabras clave («estado», «reserva 30 %», «entorno», «salud», «evento solar», «volver»). TARS ejecuta la orden y responde con los datos de la app.
 
 **Voz en la vista de casco:** mantén pulsado «Hablar con TARS» o la tecla `V`, pregunta, y suelta. TARS responde en el visor y en voz alta. Funciona en Chrome y Edge; en otros navegadores se escribe la pregunta. En Chrome, el audio se envía a los servidores de Google para transcribirlo.
 
 ## Qué hace
 
+**Introducción**
+- La primera vez que se abre la app, una nave aterriza junto al hábitat; la nave y un astronauta explican el proyecto en unas pocas frases, con subtítulos y voz.
+- Botón ES / EN para el idioma de la introducción (cambia al instante) y botón «Saltar introducción» (o tecla `Esc`). Si eliges otro idioma aquí, al terminar la app se recarga en ese idioma.
+- Para volver a verla, pulsa «?» en la cabecera o añade `?intro=1` a la dirección; `?intro=0` la omite.
+
+**Idioma (ES | EN)**
+- Un botón ES | EN en la cabecera del planificador cambia TODA la app (interfaz, TARS por texto y voz, indicaciones del casco y objetivos científicos) entre español e inglés. El español es el idioma por defecto; la elección se recuerda en el navegador. Cambiar de idioma recarga la página; también se puede forzar con `?lang=en` o `?lang=es` en la dirección. Los textos están en `src/i18n.js`.
+
 **Planificador (dentro del hábitat)**
 - Terreno 3D real de 2 × 2 km (un millón de puntos de elevación).
 - Seis capas activables con opacidad y leyenda: óptica, elevación, pendiente, térmica, rugosidad y tiempo de regreso a pie al hábitat; más curvas de nivel y el recorrido real de Curiosity.
 - Ruta automática: elige el mejor orden de paradas y el camino más seguro, evitando pendientes. Puedes añadir paradas propias con un clic en el terreno.
+- Las tarjetas de capas, el panel derecho y el perfil de la ruta se pliegan con su flecha para dejar más sitio al terreno.
 - Franja de resumen sobre el mapa: paradas activas, distancia, duración, regreso y oxígeno al llegar.
 - Reserva mínima de oxígeno: si el plan no la cumple, omite paradas hasta cumplirla.
 - Escenario de evento solar desde cualquier parada, con la ruta de regreso en línea discontinua.
 - Presupuesto de la caminata: distancia, duración, desnivel, energía, oxígeno, dosis de radiación y un veredicto GO / NO-GO según si siempre queda oxígeno para volver a pie.
 - Fotos reales de Curiosity en cada parada: lo que el astronauta verá al llegar.
 - Exporta el terreno, la ruta y el hábitat a un archivo GLB (para Blender o impresión 3D).
+
+**Ciencia en cada parada**
+- Pregunta de la caminata: ¿circuló agua subterránea por estas fracturas tarde en la historia de Marte?
+- La app calcula con el terreno si cada parada está sobre una cresta, en un hueco o entre ambos (etiqueta «Derivado»).
+- Según eso propone un objetivo y una tarea (etiqueta «Propuesta»): son una propuesta del equipo, no resultados de Curiosity. Se ven en la tarjeta de la parada, TARS los dice al llegar y sirven también para las paradas añadidas a mano. Textos en `src/science.js`.
 
 **Vista de casco (HUD)**
 - Recorres la ruta en primera persona con brújula, oxígeno, margen de regreso, hora solar local, dosis, pendiente y distancia a la siguiente parada.
@@ -72,7 +83,7 @@ En la página pública de GitHub Pages no hay servidor ni clave, así que TARS f
 La app marca cada elemento con una etiqueta: «Observación» (medido por un instrumento), «Derivado» (calculado directamente de una medición) o «Modelo» (estimación).
 
 - **Dato:** elevación, ortofoto, brillo térmico, clima, dosis de radiación, avisos DONKI, fotos y recorrido. La pendiente y la rugosidad se calculan directamente del DEM.
-- **Modelo:** velocidad de marcha, gasto metabólico, consumo de oxígeno, tiempo de regreso y veredicto GO / NO-GO. Los parámetros están en `src/nav.js` (objeto `P`) y se pueden cambiar. La temperatura mostrada en el casco es una interpolación entre el mínimo y el máximo de REMS. El color del terreno es aproximado (la ortofoto es en escala de grises).
+- **Modelo:** constantes vitales del astronauta (simuladas), velocidad de marcha, gasto metabólico, consumo de oxígeno, tiempo de regreso y veredicto GO / NO-GO. Los parámetros están en `src/nav.js` (objeto `P`) y se pueden cambiar. La temperatura mostrada en el casco es una interpolación entre el mínimo y el máximo de REMS. El color del terreno es aproximado (la ortofoto es en escala de grises).
 - **Modelos 3D** de hábitat, rover, astronautas y Curiosity: conceptuales, hechos con formas básicas.
 
 ## Limitaciones conocidas
@@ -108,9 +119,15 @@ src/terrain.js   malla 3D y shader de capas
 src/nav.js       rutas (Dijkstra) y presupuesto de la caminata
 src/models.js    modelos 3D
 src/main.js      interfaz: planificador, herramientas de TARS y vista de casco
-src/tars.js      cliente de TARS: conversación y voz
-server/          puente con la API de Claude (guarda la clave fuera del navegador)
+src/tars.js      TARS simulado: respuestas locales y voz
+src/tars-dialog.js  diálogo simulado TARS ↔ astronauta en el casco (en inglés)
+src/health.js    salud simulada del astronauta e indicaciones automáticas de TARS
+src/science.js   objetivo científico de cada parada
+src/intro.js     introducción animada (aterrizaje, nave y astronauta)
+src/intro-text.js  textos de la introducción en español e inglés
+src/i18n.js      idioma de la app (ES | EN) y diccionario de todos los textos
 tests/smoke.cjs  prueba automática en navegador
+video/           scripts que generan el vídeo de presentación
 ```
 
 ## Guion de 3 minutos para el jurado

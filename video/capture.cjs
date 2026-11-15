@@ -11,7 +11,7 @@ const fs = require('fs');
 
 const FPS = 15;                                   // fotogramas capturados por segundo de video
 const OUT = __dirname + '/frames';
-const URL = process.env.URL || 'http://localhost:5173/?malla=4&px=1';
+const URL = process.env.URL || 'http://localhost:5173/?malla=4&px=1&intro=0&lang=es';
 const PRUEBA = Boolean(process.env.PRUEBA);
 fs.rmSync(OUT, { recursive: true, force: true }); fs.mkdirSync(OUT, { recursive: true });
 
@@ -32,24 +32,6 @@ const NOTES = [                                    // rotulo pequeno arriba: que
   [66, 72, 'Real Curiosity Navcam photo'],
 ];
 
-// ---------- Respuestas de TARS para el video ----------
-// Aqui no hay clave de la API, asi que el servidor se simula. La herramienta SI se ejecuta
-// de verdad en la app, y la frase se arma con el resultado real que devuelve.
-let posts = 0;
-async function mockTars(route) {
-  if (route.request().method() === 'GET') return route.fulfill({ json: { ok: true, model: 'claude-opus-5-5' } });
-  const body = JSON.parse(route.request().postData()); posts++;
-  const last = body.messages[body.messages.length - 1];
-  if (typeof last.content === 'string') {
-    return route.fulfill({ json: { model: 'claude-opus-5-5', stop_reason: 'tool_use',
-      content: [{ type: 'tool_use', id: 'toolu_video', name: 'fijar_reserva_o2', input: { porcentaje: /75/.test(last.content) ? 75 : 0 } }] } });
-  }
-  const r = JSON.parse(last.content[0].content);
-  const text = (r.omitidas.length ? `Omito ${r.omitidas.join(' y ')}. ` : 'No hace falta omitir paradas. ') +
-    `La reserva estimada al llegar queda en ${r.o2_al_llegar_pct} %.`;
-  return route.fulfill({ json: { model: 'claude-opus-5-5', stop_reason: 'end_turn', content: [{ type: 'text', text }] } });
-}
-
 (async () => {
   const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
@@ -68,7 +50,6 @@ async function mockTars(route) {
     const gc = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (tipo, at) { return gc.call(this, tipo, at && tipo.startsWith('webgl') ? { ...at, antialias: false } : at); };
   });
-  await p.route('**/api/tars', mockTars);
   await p.goto(URL);
   await p.waitForFunction(() => window.APP && window.APP.tl !== undefined && !document.getElementById('loading'), null, { timeout: 300000 });
   await p.waitForTimeout(1500);
@@ -225,6 +206,6 @@ async function mockTars(route) {
     '<div class="tags"><span>Observation</span><span>Derived</span><span>Model</span></div><div class="url">github.com/danielortiz-create/marswalk-gale</div>' };
   await shot('cierre', 8, (u) => ev((u) => V.cam(30 + u * 16, 1400, 1000, 0, 100), u));
 
-  console.log(`Total: ${n} fotogramas = ${(n / FPS).toFixed(1)} s · peticiones a TARS simuladas: ${posts}`);
+  console.log(`Total: ${n} fotogramas = ${(n / FPS).toFixed(1)} s`);
   await b.close();
 })().catch((e) => { console.error('FALLO', e); process.exit(1); });

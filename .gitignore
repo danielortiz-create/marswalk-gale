@@ -4,7 +4,6 @@ raw
 tests/shots
 .env
 .env.*
-!.env.example
 video/frames
 video/out
 video/voices

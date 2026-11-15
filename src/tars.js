@@ -1,85 +1,39 @@
-// tars.js — cliente de TARS en el navegador: conversacion, ejecucion de herramientas y voz.
+// tars.js — TARS en el navegador: respuestas locales (simuladas, sin IA ni conexion) y voz.
 //
-// El navegador NO conoce la clave de la API. Habla con /api/tars (server/tars-proxy.js),
-// que es quien llama a Claude. Si ese servidor no existe (por ejemplo en GitHub Pages)
-// o no tiene clave, TARS funciona "sin IA": solo las ordenes rapidas, con respuestas
-// armadas a partir de los mismos datos.
+// TARS es un concepto: un agente de IA que iria en el traje. En esta demo no hay IA:
+// cada orden ejecuta una herramienta de main.js y la respuesta se arma con su resultado.
 
-const MAX_PASOS = 8;        // maximo de idas y vueltas de herramientas por pregunta
-const MAX_MENSAJES = 60;    // al pasar de aqui se empieza una conversacion nueva
+import { t, voiceLang, dec } from './i18n.js';
 
-// runTool(nombre, entrada) -> objeto con el resultado (lo implementa main.js)
-export function createTars(runTool) {
-  let messages = [];
-  let online = false, model = '';
-
-  // ¿Hay servidor con clave?
-  const ready = fetch('api/tars').then((r) => (r.ok ? r.json() : { ok: false }))
-    .then((j) => { online = Boolean(j.ok); model = j.model || ''; return online; })
-    .catch(() => { online = false; return false; });
-
-  // Envia una pregunta y devuelve el texto de la respuesta final.
-  async function ask(text) {
-    if (!online) throw new Error('TARS no tiene conexión con la IA en este sitio.');
-    if (messages.length > MAX_MENSAJES) messages = [];
-    messages.push({ role: 'user', content: text });
-    for (let paso = 0; paso < MAX_PASOS; paso++) {
-      const r = await fetch('api/tars', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages }) });
-      const data = await r.json().catch(() => ({ error: 'Respuesta no válida del servidor.' }));
-      if (!r.ok) { messages.pop(); throw new Error(data.error || `Error ${r.status}`); }
-
-      // El contenido del asistente se guarda tal cual llega (incluye bloques internos del modelo)
-      messages.push({ role: 'assistant', content: data.content });
-      const say = data.content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim();
-
-      if (data.stop_reason === 'refusal') return 'No puedo ayudar con esa petición.';
-      if (data.stop_reason === 'pause_turn') continue;
-      if (data.stop_reason !== 'tool_use') return say || 'Hecho.';
-
-      // Ejecutar todas las herramientas pedidas y devolver los resultados en UN solo mensaje
-      const results = [];
-      for (const b of data.content) {
-        if (b.type !== 'tool_use') continue;
-        try {
-          results.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(await runTool(b.name, b.input || {})) });
-        } catch (e) {
-          results.push({ type: 'tool_result', tool_use_id: b.id, is_error: true, content: String(e.message || e) });
-        }
-      }
-      messages.push({ role: 'user', content: results });
-    }
-    return 'No pude completar la petición en los pasos permitidos.';
-  }
-
-  return { ready, ask, isOnline: () => online, model: () => model, reset: () => { messages = []; } };
-}
-
-// Respuestas "sin IA": una frase armada con el resultado de la herramienta.
+// Respuesta local: una frase armada con el resultado de la herramienta.
 export function localReply(name, r) {
   if (r.error) return r.error;
+  if (r.hay_ruta === false) return t('lr.noRoute');
   switch (name) {
     case 'estado_mision': {
-      if (r.casco) return `Llevas ${r.casco.tiempo_min} min y ${r.casco.distancia_recorrida_km} km. Oxígeno ${r.casco.o2_restante_pct} %. Siguiente: ${r.casco.siguiente}, a ${r.casco.distancia_siguiente_m} m. Regreso a pie: ${r.casco.regreso_a_pie_min} min.`;
-      if (!r.hay_ruta) return 'No hay ruta transitable con los límites actuales.';
-      return `${r.veredicto}. ${r.paradas_activas} de ${r.paradas_totales} paradas, ${r.distancia_km} km en ${r.duracion_min} min. Oxígeno al llegar: ${r.o2_al_llegar_pct} % (estimado).`;
+      if (r.casco) return t('lr.statusHud', { min: r.casco.tiempo_min, km: r.casco.distancia_recorrida_km, o2: r.casco.o2_restante_pct, next: r.casco.siguiente, m: r.casco.distancia_siguiente_m, back: r.casco.regreso_a_pie_min });
+      return t('lr.statusPlan', { verdict: r.veredicto, a: r.paradas_activas, b: r.paradas_totales, km: r.distancia_km, min: r.duracion_min, o2: r.o2_al_llegar_pct });
     }
     case 'fijar_reserva_o2':
-      return (r.omitidas.length ? `Omito ${r.omitidas.join(', ')}. ` : 'No hace falta omitir paradas. ') +
-        `Reserva estimada al llegar: ${r.o2_al_llegar_pct} %` + (r.cumple ? '.' : `, por debajo del ${r.reserva_minima_pct} % pedido.`);
+      return (r.omitidas.length ? t('lr.skip', { list: r.omitidas.join(', ') }) : t('lr.noSkip')) +
+        t('lr.reserve', { pct: r.o2_al_llegar_pct }) + (r.cumple ? t('lr.reserveOk') : t('lr.reserveLow', { min: r.reserva_minima_pct }));
     case 'simular_evento_solar':
     case 'regresar_al_habitat':
-      return `Regreso al hábitat desde ${r.desde}: ${r.regreso_min} min. Oxígeno estimado al llegar: ${r.o2_al_llegar_pct} %.` +
-        (r.dosis_duplicada ? ' Dosis de radiación duplicada durante el regreso.' : '');
+      return t('lr.back', { from: r.desde, min: r.regreso_min, o2: r.o2_al_llegar_pct }) + (r.dosis_duplicada ? t('lr.backDouble') : '');
     case 'activar_parada':
-      return `${r.parada} ${r.activa ? 'incluida' : 'excluida'}. Ahora ${r.paradas_activas} de ${r.paradas_totales} paradas y ${r.distancia_km} km.`;
+      return t('lr.stop', { p: r.parada, estado: r.activa ? t('lr.included') : t('lr.excluded'), a: r.paradas_activas, b: r.paradas_totales, km: r.distancia_km });
     case 'entorno':
-      return `Aire de ${r.clima.aire_min_C} a ${r.clima.aire_max_C} °C, presión ${r.clima.presion_Pa} Pa (REMS, sol ${r.clima.sol}). Radiación ${r.radiacion.mSv_por_dia} mSv al día (RAD). ${r.clima_espacial.avisos} avisos solares recientes.`;
+      return t('lr.env', { min: r.clima.aire_min_C, max: r.clima.aire_max_C, p: r.clima.presion_Pa, sol: r.clima.sol, r: r.radiacion.mSv_por_dia, n: r.clima_espacial.avisos });
     case 'info_parada':
-      return `${r.nombre}: elevación ${r.elevacion_m} m, pendiente ${r.pendiente_grados}°, regreso a pie ${r.regreso_a_pie_min} min.`;
+      return t('lr.stopInfo', { nombre: r.nombre, situacion: r.ciencia.situacion, tarea: r.ciencia.tarea, e: r.elevacion_m, s: r.pendiente_grados }) +
+        (r.regreso_a_pie_min === null ? t('lr.noWayBack') : t('lr.walkBack', { m: r.regreso_a_pie_min }));
+    case 'salud_astronauta':
+      return (r.momento === 'ahora'
+        ? t('lr.healthNow', { fc: r.fc_lpm, rr: r.respiracion_rpm, temp: dec(r.temperatura_corporal_C), estado: r.estado })
+        : t('lr.healthPlan', { fc: r.fc_maxima_lpm, min: r.en_el_minuto })) + t('lr.simulated');
     case 'mostrar_capa':
-      return `Capa ${r.capa} ${r.visible ? 'encendida' : 'apagada'}.`;
-    default: return 'Hecho.';
+      return t(r.visible ? 'lr.layerOn' : 'lr.layerOff', { capa: r.capa });
+    default: return t('lr.default');
   }
 }
 
@@ -94,7 +48,7 @@ export function createVoice({ onText, onState }) {
     if (!supported || listening) return;
     window.speechSynthesis?.cancel();
     rec = new SR();
-    rec.lang = 'es-ES'; rec.interimResults = true; rec.continuous = true;
+    rec.lang = voiceLang; rec.interimResults = true; rec.continuous = true;
     finalText = '';
     rec.onresult = (e) => {
       let interim = '';
@@ -104,7 +58,7 @@ export function createVoice({ onText, onState }) {
       }
       onState?.('escuchando', (finalText + interim).trim());
     };
-    rec.onerror = (e) => { listening = false; onState?.('error', e.error === 'not-allowed' ? 'Permite el micrófono para hablar con TARS.' : 'No te oí. Inténtalo de nuevo.'); };
+    rec.onerror = (e) => { listening = false; onState?.('error', e.error === 'not-allowed' ? t('voice.denied') : t('voice.nohear')); };
     rec.onend = () => {
       const was = listening; listening = false;
       const text = finalText.trim();
@@ -115,14 +69,19 @@ export function createVoice({ onText, onState }) {
   }
   function stop() { if (rec && listening) rec.stop(); }
 
-  function speak(text) {
-    const s = window.speechSynthesis; if (!s || !text) return;
+  // vlang: idioma de la voz (por defecto el de la app). onEnd (opcional) se llama cuando termina de hablar.
+  // opts: { pitch, voz } — voz = posicion entre las voces de ese idioma (para distinguir a dos personas).
+  // Devuelve false si el navegador no puede hablar.
+  function speak(text, vlang = voiceLang, onEnd = null, opts = {}) {
+    const s = window.speechSynthesis; if (!s || !text) return false;
     s.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'es-ES'; u.rate = 1.05;
-    const v = s.getVoices().find((k) => k.lang && k.lang.toLowerCase().startsWith('es'));
-    if (v) u.voice = v;
+    u.lang = vlang; u.rate = 1.05; u.pitch = opts.pitch || 1;
+    const vs = s.getVoices().filter((k) => k.lang && k.lang.toLowerCase().startsWith(vlang.slice(0, 2).toLowerCase()));
+    if (vs.length) u.voice = vs[(opts.voz || 0) % vs.length];
+    if (onEnd) u.onend = u.onerror = onEnd;
     s.speak(u);
+    return true;
   }
 
   return { supported, start, stop, speak, isListening: () => listening };

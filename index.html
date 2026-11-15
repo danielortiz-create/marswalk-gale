@@ -9,95 +9,119 @@
 <body data-mode="plan">
   <canvas id="view"></canvas>
   <div id="labels"></div>
-  <div id="loading"><div><b>MARSWALK GALE</b><span id="loadmsg">Cargando terreno real de Marte…</span></div></div>
+  <div id="loading"><div><b>MARSWALK GALE</b><span id="loadmsg" data-i18n="load.terrain">Cargando terreno real de Marte…</span></div></div>
 
   <!-- ===================== PLANIFICADOR ===================== -->
   <div id="app" class="plan">
     <header>
-      <div class="brand"><b>MARSWALK GALE</b><span>Monte Sharp · cráter Gale</span></div>
+      <div class="brand"><b>MARSWALK GALE</b><span data-i18n="brand.sub">Monte Sharp · cráter Gale</span></div>
       <div class="actions">
-        <button id="btnAdd">＋ Añadir parada</button>
-        <button id="btnGlb">Exportar modelo 3D (GLB)</button>
-        <button id="btnHud" class="primary">Vista de casco ▶</button>
+        <div class="ilang" id="langSw" data-i18n-aria-label="lang.aria" aria-label="Idioma de la aplicación"><button data-lang="es">ES</button><button data-lang="en">EN</button></div>
+        <button id="btnIntro" title="Ver la introducción" aria-label="Ver la introducción" data-i18n-title="btn.intro" data-i18n-aria-label="btn.intro">?</button>
+        <button id="btnAdd" data-i18n="btn.add">＋ Añadir parada</button>
+        <button id="btnGlb" data-i18n="btn.glb">Exportar modelo 3D (GLB)</button>
+        <button id="btnHud" class="primary" data-i18n="btn.hud">Vista de casco ▶</button>
       </div>
     </header>
 
     <!-- Franja de resumen de la misión -->
     <div id="strip">
       <div class="sitem"><span class="ico">⌖</span><b id="sStops">–</b></div>
-      <div class="sitem"><span class="ico">↔</span>Distancia <b id="sDist">–</b></div>
-      <div class="sitem"><span class="ico">◷</span>Duración <b id="sTime">–</b></div>
-      <div class="sitem"><span class="ico">↩</span><span id="sBackLbl">Regreso máx.</span> <b id="sBack">–</b></div>
-      <div class="sitem"><span class="ico">O₂</span>al llegar <b id="sO2">–</b></div>
+      <div class="sitem"><span class="ico">↔</span><span data-i18n="k.dist">Distancia</span> <b id="sDist">–</b></div>
+      <div class="sitem"><span class="ico">◷</span><span data-i18n="k.time">Duración</span> <b id="sTime">–</b></div>
+      <div class="sitem"><span class="ico">↩</span><span id="sBackLbl" data-i18n="strip.backMax">Regreso máx.</span> <b id="sBack">–</b></div>
+      <div class="sitem"><span class="ico">O₂</span><span data-i18n="strip.o2">al llegar</span> <b id="sO2">–</b></div>
       <div class="sitem"><span id="sState" class="chip">–</span></div>
     </div>
 
     <aside id="left" class="panel">
-      <h2>Capas de datos</h2>
+      <button class="fold" id="foldLeft" aria-label="Ocultar o mostrar las capas de datos" data-i18n-aria-label="fold.left">◀</button>
+      <h2 data-i18n="panel.layers">Capas de datos</h2>
       <div id="layers"></div>
       <details id="more">
-        <summary>Más capas y ajustes</summary>
+        <summary data-i18n="panel.more">Más capas y ajustes</summary>
         <div id="layersMore"></div>
-        <h2>Modelo de marcha <em class="mod">Modelo</em></h2>
-        <label class="row">Pendiente máxima <output id="oSlopeMax"></output>
+        <h2><span data-i18n="panel.gait">Modelo de marcha</span> <em class="mod" data-i18n="tag.model">Modelo</em></h2>
+        <label class="row"><span data-i18n="gait.slope">Pendiente máxima</span> <output id="oSlopeMax"></output>
           <input type="range" id="pSlope" min="15" max="30" step="1" /></label>
-        <label class="row">Aversión al riesgo <output id="oRisk"></output>
+        <label class="row"><span data-i18n="gait.risk">Aversión al riesgo</span> <output id="oRisk"></output>
           <input type="range" id="pRisk" min="0" max="3" step="0.5" /></label>
-        <label class="row">Minutos por parada <output id="oStop"></output>
+        <label class="row"><span data-i18n="gait.stop">Minutos por parada</span> <output id="oStop"></output>
           <input type="range" id="pStop" min="5" max="60" step="5" /></label>
-        <label class="row">Reserva mínima de O₂ al llegar <output id="oRes"></output>
+        <label class="row"><span data-i18n="gait.res">Reserva mínima de O₂ al llegar</span> <output id="oRes"></output>
           <input type="range" id="pRes" min="0" max="90" step="5" /></label>
       </details>
     </aside>
 
     <main id="mapCell">
       <div id="legend">
-        <div><i class="ln solid"></i>Ruta original</div>
-        <div id="legBack" hidden><i class="ln dash"></i>Regreso al hábitat</div>
-        <div><i class="ln white"></i>Recorrido de Curiosity</div>
+        <div><i class="ln solid"></i><span data-i18n="leg.route">Ruta original</span></div>
+        <div id="legBack" hidden><i class="ln dash"></i><span data-i18n="leg.back">Regreso al hábitat</span></div>
+        <div><i class="ln white"></i><span data-i18n="layer.curiosity.name">Recorrido de Curiosity</span></div>
       </div>
       <section id="profileBox">
-        <div class="ptitle">Perfil de la ruta — elevación (color = pendiente) y oxígeno restante</div>
+        <div class="ptitle"><button class="fold" id="foldProf" aria-label="Ocultar o mostrar el perfil de la ruta" data-i18n-aria-label="fold.prof">▼</button><span data-i18n="prof.title">Perfil de la ruta — elevación (color = pendiente) y oxígeno restante</span></div>
         <canvas id="profile"></canvas>
       </section>
     </main>
 
     <aside id="right" class="panel">
+      <button class="fold" id="foldRight" aria-label="Ocultar o mostrar el panel de TARS, paradas y entorno" data-i18n-aria-label="fold.right">▶</button>
       <div class="tabs">
         <button data-tab="tars" class="on">TARS</button>
-        <button data-tab="stops">Paradas</button>
-        <button data-tab="env">Entorno</button>
+        <button data-tab="stops" data-i18n="tab.stops">Paradas</button>
+        <button data-tab="env" data-i18n="tab.env">Entorno</button>
       </div>
 
       <div class="tab" id="tab-tars">
-        <h2>Agente de misión · TARS</h2>
+        <h2 data-i18n="tars.title">TARS · agente de IA del traje</h2>
         <div id="tarsState" class="tstate"></div>
-        <div id="evChip" class="evchip" hidden>☀ Evento solar simulado</div>
-        <button id="btnSolar" class="outline">Simular evento solar</button>
+        <div id="evChip" class="evchip" data-i18n="ev.chip" hidden>☀ Evento solar simulado</div>
+        <button id="btnSolar" class="outline" data-i18n="btn.solar">Simular evento solar</button>
         <div id="chat"></div>
         <div id="quick"></div>
         <form id="tarsForm">
-          <input id="tarsIn" type="text" placeholder="Pídele algo a TARS…" autocomplete="off" />
-          <button type="button" id="tarsMic" title="Hablar">🎙</button>
-          <button type="submit">Enviar</button>
+          <input id="tarsIn" type="text" placeholder="Pídele algo a TARS…" data-i18n-placeholder="tars.ph" autocomplete="off" />
+          <button type="button" id="tarsMic" title="Hablar" data-i18n-title="tars.mic">🎙</button>
+          <button type="submit" data-i18n="btn.send">Enviar</button>
         </form>
-        <button id="btnBack" class="primary wide" hidden>Ver ruta de regreso</button>
+        <button id="btnBack" class="primary wide" data-i18n="btn.backRoute" hidden>Ver ruta de regreso</button>
         <div id="stopCard"></div>
       </div>
 
       <div class="tab" id="tab-stops" hidden>
-        <h2>Presupuesto de la caminata <em class="mod">Modelo</em></h2>
+        <h2><span data-i18n="budget.title">Presupuesto de la caminata</span> <em class="mod" data-i18n="tag.model">Modelo</em></h2>
         <div id="status"></div>
         <div id="budget" class="grid"></div>
-        <h2>Paradas científicas</h2>
+        <h2 data-i18n="stops.title">Paradas científicas</h2>
         <div id="stops"></div>
       </div>
 
       <div class="tab" id="tab-env" hidden>
-        <h2>Entorno</h2>
+        <h2 data-i18n="tab.env">Entorno</h2>
         <div id="env"></div>
       </div>
     </aside>
+  </div>
+
+  <!-- ===================== INTRODUCCIÓN ===================== -->
+  <div id="intro">
+    <div class="itop">
+      <div class="ilang"><button data-lang="es">ES</button><button data-lang="en">EN</button></div>
+      <button id="iSkip"></button>
+    </div>
+    <div id="introCard">
+      <div class="k" id="iKicker"></div>
+      <h1>MARSWALK GALE</h1>
+      <p id="iTag"></p>
+      <button id="iStart" class="primary"></button>
+    </div>
+    <div id="introSub" hidden>
+      <b id="iWho"></b>
+      <span id="iLine"></span>
+      <button id="iNext"></button>
+    </div>
+    <div id="introFade"></div>
   </div>
 
   <div id="photo" hidden>
@@ -113,39 +137,49 @@
     <div id="hudAlert"></div>
     <div class="hbox hl">
       <div class="hrow"><span>O₂</span><div class="bar"><i id="hO2bar"></i></div><b id="hO2"></b></div>
-      <div class="hrow"><span>MARGEN REGRESO</span><b id="hMargin"></b></div>
-      <div class="hrow"><span>TIEMPO EVA</span><b id="hTime"></b></div>
-      <div class="hrow"><span>HORA LOCAL</span><b id="hClock"></b></div>
-      <div class="hrow"><span>DOSIS</span><b id="hDose"></b></div>
-      <div class="hrow"><span>TEMP. AIRE</span><b id="hTemp"></b></div>
+      <div class="hrow"><span data-i18n="hud.margin">MARGEN REGRESO</span><b id="hMargin"></b></div>
+      <div class="hrow"><span data-i18n="hud.eva">TIEMPO EVA</span><b id="hTime"></b></div>
+      <div class="hrow"><span data-i18n="hud.clock">HORA LOCAL</span><b id="hClock"></b></div>
+      <div class="hrow"><span data-i18n="hud.dose">DOSIS</span><b id="hDose"></b></div>
+      <div class="hrow"><span data-i18n="hud.airT">TEMP. AIRE</span><b id="hTemp"></b></div>
+    </div>
+    <div class="hbox hl hsalud">
+      <div class="htitle"><b data-i18n="hud.health">SALUD</b> <span data-i18n="hud.healthSub">simulada · Modelo</span></div>
+      <div class="hrow"><span data-i18n="hud.pulse">PULSO</span><b id="hHr"></b></div>
+      <div class="hrow"><span data-i18n="hud.breath">RESPIRACIÓN</span><b id="hResp"></b></div>
+      <div class="hrow"><span data-i18n="hud.bodyT">TEMP. CORPORAL</span><b id="hBodyT"></b></div>
+      <div class="hrow"><span data-i18n="hud.effort">ESFUERZO</span><b id="hLoad"></b></div>
     </div>
     <div class="hbox hr">
-      <div class="hrow"><span>SIGUIENTE</span><b id="hNext"></b></div>
-      <div class="hrow"><span>DISTANCIA</span><b id="hNextD"></b></div>
-      <div class="hrow"><span>PENDIENTE</span><b id="hSlope"></b></div>
-      <div class="hrow"><span>ELEVACIÓN</span><b id="hElev"></b></div>
-      <div class="hrow"><span>RECORRIDO</span><b id="hDist"></b></div>
-      <div class="hrow"><span>REGRESO A PIE</span><b id="hBack"></b></div>
+      <div class="hrow"><span data-i18n="hud.next">SIGUIENTE</span><b id="hNext"></b></div>
+      <div class="hrow"><span data-i18n="hud.dist">DISTANCIA</span><b id="hNextD"></b></div>
+      <div class="hrow"><span data-i18n="hud.slope">PENDIENTE</span><b id="hSlope"></b></div>
+      <div class="hrow"><span data-i18n="hud.elev">ELEVACIÓN</span><b id="hElev"></b></div>
+      <div class="hrow"><span data-i18n="hud.walked">RECORRIDO</span><b id="hDist"></b></div>
+      <div class="hrow"><span data-i18n="hud.back">REGRESO A PIE</span><b id="hBack"></b></div>
     </div>
+    <!-- Dialogo simulado TARS <-> astronauta (subtitulo; textos en src/tars-dialog.js) -->
+    <div id="hSub" hidden><b id="hSubWho"></b><span id="hSubText"></span></div>
     <div id="hudPhoto" hidden><img id="hudPhotoImg" alt="" /><div id="hudPhotoCap"></div></div>
 
     <!-- TARS por voz -->
     <div id="hudTars">
-      <div class="htitle">TARS <span id="hTarsState"></span></div>
+      <div class="htitle"><b data-i18n="hud.tarsTitle">TARS · AGENTE DEL TRAJE</b> <span id="hTarsState"></span></div>
+      <div id="hTarsTip"></div>
       <div id="hTarsYou"></div>
-      <div id="hTarsSay">Mantén pulsado el botón o la tecla V y pregunta.</div>
+      <div id="hTarsSay" data-i18n="hud.say">Mantén pulsado el botón o la tecla V y pregunta.</div>
       <div class="hrowbtn">
-        <button id="hMic">🎙 Hablar con TARS</button>
-        <form id="hTarsForm"><input id="hTarsIn" type="text" placeholder="o escribe aquí…" autocomplete="off" /></form>
+        <button id="hMic" data-i18n="hud.mic">🎙 Hablar con TARS</button>
+        <form id="hTarsForm"><input id="hTarsIn" type="text" placeholder="o escribe aquí…" data-i18n-placeholder="hud.type" autocomplete="off" /></form>
       </div>
     </div>
 
     <div class="hctl">
       <button id="hPlay">⏸</button>
       <input type="range" id="hScrub" min="0" max="1000" value="0" />
-      <select id="hSpeed"><option value="1">×1</option><option value="10">×10</option><option value="30" selected>×30</option><option value="120">×120</option></select>
-      <button id="hSep">Simular alerta solar</button>
-      <button id="hExit">Salir</button>
+      <select id="hSpeed"><option value="1">×1</option><option value="10" selected>×10</option><option value="30">×30</option><option value="120">×120</option></select>
+      <button id="hSep" data-i18n="hud.sep">Simular alerta solar</button>
+      <button id="hExit" data-i18n="hud.exit">Salir</button>
     </div>
   </div>
 

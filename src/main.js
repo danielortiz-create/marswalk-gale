@@ -8,18 +8,27 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { loadTerrain } from './terrain.js';
 import { createNav, P } from './nav.js';
 import { makeAstronaut, makeHabitat, makeRover, makeCuriosity, makeBeacon } from './models.js';
-import { createTars, createVoice, localReply } from './tars.js';
+import { createVoice, localReply } from './tars.js';
+import { createDialog } from './tars-dialog.js';
+import { createIntro } from './intro.js';
+import { vitals, guidance } from './health.js';
+import { scienceFor, PREGUNTA } from './science.js';
+import { t, lang, dec, applyStatic } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 const json = (u) => fetch(u).then((r) => r.json());
 const fmtTime = (s) => { const m = Math.round(s / 60); return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`; };
-const num = (n, d = 0) => n.toFixed(d).replace('.', ',');     // numeros con coma decimal
+const num = (n, d = 0) => dec(n.toFixed(d));     // numeros con coma decimal (español) o punto (ingles)
+// Preferencias guardadas en el navegador (si no se puede guardar, la app funciona igual)
+const recall = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const store = (k, v) => { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } };
 const EVA_START_H = 9.0;          // la caminata empieza a las 09:00 hora solar local
 const LAT = -4.81;
 
 const A = {};                     // estado global de la app (facil de inspeccionar en la consola)
 window.APP = A;
 
+applyStatic();                    // idioma: rellena los textos fijos del HTML antes de construir la interfaz
 init().catch((e) => { $('loadmsg').textContent = 'Error: ' + e.message; console.error(e); });
 
 async function init() {
@@ -30,7 +39,7 @@ async function init() {
   const half = meta.size_m / 2;
   A.eRef = plan.habitat.elev;
   A.habitat = { x: plan.habitat.x - half, z: plan.habitat.y - half, slope: plan.habitat.mean_slope_deg };
-  A.stops = plan.stops.map((s, i) => ({ id: s.id, name: `Boxwork ${i + 1}`, sub: `Curiosity estuvo aquí · sol ${s.sol}`,
+  A.stops = plan.stops.map((s, i) => ({ id: s.id, name: `Boxwork ${i + 1}`, sub: t('stop.sub', { sol: s.sol }),
     x: s.x - half, z: s.y - half, photos: s.photos, on: true }));
   A.doseRate = radiation.gcr_dose_equivalent_mSv_per_day;
   A.sep = false; A.event = null; A.omitted = []; A.unreachable = [];
@@ -49,15 +58,16 @@ async function init() {
   const sunLight = new THREE.DirectionalLight(0xfff0dd, 2.2); scene.add(sunLight);
   Object.assign(A, { renderer, scene, camera, controls, sunLight });
 
-  $('loadmsg').textContent = 'Construyendo la malla 3D (1 048 576 puntos de elevación HiRISE)…';
+  $('loadmsg').textContent = t('load.mesh');
   // ?malla=2 (o 4) usa una malla mas ligera para equipos sin tarjeta grafica
   const q = new URLSearchParams(location.search);
   const stride = Math.max(1, Math.min(8, +q.get('malla') || 1));
   if (q.get('px')) renderer.setPixelRatio(+q.get('px'));
   const terrain = A.terrain = await loadTerrain(meta, A.eRef, stride);
   scene.add(terrain.mesh);
-  $('loadmsg').textContent = 'Calculando rejilla de navegación…';
+  $('loadmsg').textContent = t('load.nav');
   A.nav = await createNav(meta, terrain);
+  for (const s of A.stops) s.sci = scienceFor(terrain, s.x, s.z);      // objetivo cientifico de cada parada
 
   // ---------- modelos ----------
   const ground = (obj, x, z, dy = 0) => { obj.position.set(x, terrain.heightAt(x, z) + dy, z); scene.add(obj); return obj; };
@@ -80,9 +90,14 @@ async function init() {
   buildLayerPanel(); buildParams(); buildEnv(); wireUi(); setupTars();
   setSun(EVA_START_H);
   layout(); addEventListener('resize', layout);
-  $('loadmsg').textContent = 'Calculando la ruta más segura…';
+  $('loadmsg').textContent = t('load.route');
   await new Promise((r) => setTimeout(r, 30));
   replan();
+  // Introduccion: la primera vez que se abre la app (o con ?intro=1). ?intro=0 la omite.
+  A.intro = createIntro(A, { layout, recall, store });
+  $('btnIntro').onclick = () => A.intro.start();
+  const qi = q.get('intro');
+  if (qi !== '0' && (qi === '1' || !recall('mw_intro'))) A.intro.start();
   $('loading').remove();
   renderer.setAnimationLoop(frame);
 }
@@ -99,9 +114,9 @@ function setLine(line, pos) {
   if (line.material.dashed) line.computeLineDistances();
 }
 
-// El lienzo 3D ocupa la columna central en el planificador y toda la pantalla en el casco
+// El lienzo 3D ocupa la columna central en el planificador y toda la pantalla en el casco y la introduccion
 function layout() {
-  const hud = document.body.dataset.mode === 'hud';
+  const hud = document.body.dataset.mode !== 'plan';
   const r = hud ? { left: 0, top: 0, width: innerWidth, height: innerHeight } : $('mapCell').getBoundingClientRect();
   const w = Math.max(50, Math.round(r.width)), h = Math.max(50, Math.round(r.height));
   for (const el of [A.renderer.domElement, $('labels')]) {
@@ -136,26 +151,26 @@ function airTemp(hour) {
 //  CAPAS
 // =====================================================================
 // tag: obs = Observacion (medido) · der = Derivado (calculado de una medicion) · mod = Modelo (estimacion)
-const TAGS = { obs: ['', 'Observación'], der: ['der', 'Derivado'], mod: ['mod', 'Modelo'] };
+const TAGS = { obs: ['', t('tag.obs')], der: ['der', t('tag.der')], mod: ['mod', t('tag.model')] };
 const LAYERS = [
-  { id: 'ortofoto', key: 'oOrtho', name: 'Ortofoto HiRISE', tag: 'obs', on: 1, src: 'MRO HiRISE · 25 cm/píxel (mostrada a 50 cm). Color aproximado.',
+  { id: 'ortofoto', key: 'oOrtho', name: t('layer.ortofoto.name'), tag: 'obs', on: 1, src: t('layer.ortofoto.src'),
     grad: 'linear-gradient(90deg,#3a2012,#ffcc99)' },
-  { id: 'elevacion', key: 'oElev', name: 'Elevación', tag: 'der', src: 'MRO HiRISE DEM · 1 m (USGS).',
+  { id: 'elevacion', key: 'oElev', name: t('layer.elevacion.name'), tag: 'der', src: t('layer.elevacion.src'),
     grad: 'linear-gradient(90deg,#21338c,#2699a6,#8cc759,#edbf40,#f2f2eb)', ends: () => [`${A.meta.elev_min.toFixed(0)} m`, `${A.meta.elev_max.toFixed(0)} m`] },
-  { id: 'pendiente', key: 'oSlope', name: 'Pendiente', tag: 'der', src: 'Derivada del DEM HiRISE (escala de ~2 m).',
+  { id: 'pendiente', key: 'oSlope', name: t('layer.pendiente.name'), tag: 'der', src: t('layer.pendiente.src'),
     grad: 'linear-gradient(90deg,#33b859 0 30%,#f2d933 30% 62%,#f5851f 62% 80%,#d91f26 80%)', ends: () => ['<10°', '10–20°', '20–25°', '>25°'] },
-  { id: 'termica', key: 'oTherm', name: 'Térmica THEMIS', tag: 'obs', src: 'Mars Odyssey THEMIS · 100 m/píxel (25×25 píxeles aquí). De noche, más cálido = roca firme.',
-    grad: 'linear-gradient(90deg,#050333,#6b0f73,#cc404d,#fa9926,#fcfab3)', ends: () => ['frío', 'cálido'],
-    extra: '<label class="sub"><input type="checkbox" id="thDay"> usar imagen diurna</label>' },
-  { id: 'recorrido_curiosity', line: 'traverseLine', name: 'Recorrido de Curiosity', tag: 'obs', on: 1,
-    src: () => `Trayectoria documentada del rover (soles ${A.traverse[0].sol}–${A.traverse[A.traverse.length - 1].sol}, 2025–2026).` },
+  { id: 'termica', key: 'oTherm', name: t('layer.termica.name'), tag: 'obs', src: t('layer.termica.src'),
+    grad: 'linear-gradient(90deg,#050333,#6b0f73,#cc404d,#fa9926,#fcfab3)', ends: () => [t('layer.termica.cold'), t('layer.termica.warm')],
+    extra: `<label class="sub"><input type="checkbox" id="thDay"> ${t('layer.termica.day')}</label>` },
+  { id: 'recorrido_curiosity', line: 'traverseLine', name: t('layer.curiosity.name'), tag: 'obs', on: 1,
+    src: () => t('layer.curiosity.src', { a: A.traverse[0].sol, b: A.traverse[A.traverse.length - 1].sol }) },
   // --- en "Mas capas" ---
-  { id: 'rugosidad', key: 'oRough', name: 'Rugosidad del suelo', tag: 'der', more: true, src: 'Relieve en ventanas de 5 m, del DEM HiRISE.',
-    grad: 'linear-gradient(90deg,#450054,#3b528c,#21918c,#5ec961,#fde824)', ends: () => ['liso', '≥ 0,5 m'] },
-  { id: 'regreso', key: 'oBack', name: 'Regreso a pie al hábitat', tag: 'mod', more: true, src: 'Minutos caminando hasta el hábitat; líneas cada 10 min. Morado = inalcanzable.',
+  { id: 'rugosidad', key: 'oRough', name: t('layer.rugosidad.name'), tag: 'der', more: true, src: t('layer.rugosidad.src'),
+    grad: 'linear-gradient(90deg,#450054,#3b528c,#21918c,#5ec961,#fde824)', ends: () => [t('layer.rugosidad.lo'), t('layer.rugosidad.hi')] },
+  { id: 'regreso', key: 'oBack', name: t('layer.regreso.name'), tag: 'mod', more: true, src: t('layer.regreso.src'),
     grad: 'linear-gradient(90deg,#26bf66,#bfd940,#f7b326,#eb5926,#b31a33)', ends: () => ['0 min', '≥ 60 min'] },
-  { id: 'curvas', uni: 'uContours', name: 'Curvas de nivel (10 m / 50 m)', tag: 'der', more: true },
-  { id: 'ruta', line: 'routeLine', name: 'Ruta de la caminata', tag: 'mod', more: true, on: 1 },
+  { id: 'curvas', uni: 'uContours', name: t('layer.curvas.name'), tag: 'der', more: true },
+  { id: 'ruta', line: 'routeLine', name: t('layer.ruta.name'), tag: 'mod', more: true, on: 1 },
 ];
 
 function buildLayerPanel() {
@@ -167,7 +182,7 @@ function buildLayerPanel() {
     const ends = L.ends ? L.ends() : null;
     d.innerHTML = `<label><input type="checkbox" ${L.on ? 'checked' : ''}><span>${L.name}</span><em class="${cls}">${tag}</em></label>
       ${src ? `<div class="src">${src}</div>` : ''}
-      ${L.key ? `<input type="range" min="0" max="1" step="0.05" value="${L.on ? 1 : 0.75}" style="--grad:${L.grad}" title="Opacidad">` : ''}
+      ${L.key ? `<input type="range" min="0" max="1" step="0.05" value="${L.on ? 1 : 0.75}" style="--grad:${L.grad}" title="${t('layer.opacity')}">` : ''}
       ${ends ? `<div class="ends">${ends.map((e) => `<span>${e}</span>`).join('')}</div>` : ''}${L.extra || ''}`;
     const chk = d.querySelector('input[type=checkbox]'), rng = d.querySelector('input[type=range]');
     L.set = (on) => { chk.checked = on; L.upd(); };
@@ -202,10 +217,15 @@ function buildParams() {
 function replan() {
   const { nav, terrain } = A;
   const t0 = performance.now();
-  A.backField = nav.dijkstra(nav.cellOf(A.habitat.x, A.habitat.z), true);
-  const mins = new Float32Array(nav.n * nav.n);
-  for (let i = 0; i < mins.length; i++) mins[i] = A.backField.time[i] === Infinity ? -1 : A.backField.time[i] / 60;
-  terrain.setBackTexture(mins, nav.n);
+  // El campo de regreso al habitat solo depende de los parametros de marcha: se reutiliza si no cambiaron
+  const sig = [P.vFlat, P.maxCellSlope, P.maxDirSlope, P.risk].join('|');
+  if (sig !== A.backSig) {
+    A.backSig = sig;
+    A.backField = nav.dijkstra(nav.cellOf(A.habitat.x, A.habitat.z), true);
+    const mins = new Float32Array(nav.n * nav.n);
+    for (let i = 0; i < mins.length; i++) mins[i] = A.backField.time[i] === Infinity ? -1 : A.backField.time[i] / 60;
+    terrain.setBackTexture(mins, nav.n);
+  }
 
   const active = A.stops.filter((s) => s.on);
   const reachable = active.filter((s) => A.backField.time[nav.cellOf(s.x, s.z)] !== Infinity);
@@ -263,7 +283,7 @@ function drawBack() {
   const ev = A.event;
   A.backLine.visible = Boolean(ev); A.backArrows.clear();
   $('legBack').hidden = !ev; $('btnBack').hidden = !ev; $('evChip').hidden = !(ev && ev.solar);
-  $('btnSolar').textContent = ev ? 'Quitar evento simulado' : 'Simular evento solar';
+  $('btnSolar').textContent = ev ? t('btn.solarOff') : t('btn.solar');
   if (!ev) return;
   const pts = smoothPts(ev.back.pts);
   setLine(A.backLine, linePos(ev.back.pts, 2.0));
@@ -288,43 +308,43 @@ function drawBeacons() {
 
 // Franja de resumen sobre el mapa
 function drawStrip() {
-  $('sStops').textContent = `${inRoute()} de ${A.stops.length} paradas activas`;
+  $('sStops').textContent = t('strip.stops', { n: inRoute(), total: A.stops.length });
   const st = $('sState');
   if (!A.tl) {
     for (const id of ['sDist', 'sTime', 'sBack', 'sO2']) $(id).textContent = '–';
-    st.className = 'chip nogo'; st.textContent = 'Sin ruta'; return;
+    st.className = 'chip nogo'; st.textContent = t('strip.none'); return;
   }
   const T = A.tl.total, ev = A.event;
   $('sDist').textContent = num(T.dist / 1000, 1) + ' km';
   $('sTime').textContent = fmtTime(T.time);
-  $('sBackLbl').textContent = ev ? 'Regreso' : 'Regreso máx.';
+  $('sBackLbl').textContent = ev ? t('strip.back') : t('strip.backMax');
   $('sBack').textContent = (ev ? ev.info.regreso_min : Math.round(T.maxBack / 60)) + ' min';
   $('sO2').textContent = (ev ? ev.info.o2_al_llegar_pct : Math.round(T.o2LeftPct)) + ' %';
-  if (ev) { st.className = 'chip sim'; st.textContent = 'Escenario simulado'; }
-  else { st.className = 'chip ' + (isGo() ? 'go' : 'nogo'); st.textContent = isGo() ? 'GO · plan viable' : 'NO-GO'; }
+  if (ev) { st.className = 'chip sim'; st.textContent = t('strip.sim'); }
+  else { st.className = 'chip ' + (isGo() ? 'go' : 'nogo'); st.textContent = isGo() ? t('strip.go') : t('strip.nogo'); }
 }
 
 function drawBudget() {
   const st = $('status'), b = $('budget');
   if (!A.tl) {
-    st.className = 'nogo'; st.innerHTML = 'SIN RUTA<small>No hay camino transitable con estos límites. Sube la pendiente máxima o quita paradas.</small>';
+    st.className = 'nogo'; st.innerHTML = `${t('bud.noRoute')}<small>${t('bud.noRoute.d')}</small>`;
     b.innerHTML = ''; return;
   }
   const T = A.tl.total;
   st.className = isGo() ? 'go' : 'nogo';
   st.innerHTML = isGo()
-    ? `GO — caminata viable<small>Siempre queda oxígeno para volver a pie con ${P.o2ReserveMin} min de reserva.${A.omitted.length ? ` Omitidas por la reserva de O₂: ${A.omitted.map((s) => s.name).join(', ')}.` : ''}</small>`
+    ? `${t('bud.go')}<small>${t('bud.go.d', { min: P.o2ReserveMin })}${A.omitted.length ? t('bud.go.omit', { list: A.omitted.map((s) => s.name).join(', ') }) : ''}</small>`
     : A.unreachable.length
-      ? `NO-GO — parada inalcanzable<small>${A.unreachable.map((s) => s.name).join(', ')} queda fuera del terreno transitable con estos límites.</small>`
+      ? `${t('bud.unreach')}<small>${t('bud.unreach.d', { list: A.unreachable.map((s) => s.name).join(', ') })}</small>`
       : T.o2LeftPct < P.o2ReservePct
-        ? `NO-GO — reserva de O₂ no alcanzable<small>Ni con una sola parada se llega con ${P.o2ReservePct} % de oxígeno.</small>`
-        : `NO-GO — oxígeno insuficiente<small>A los ${fmtTime(T.noReturn.t)} ya no se podría volver a pie con la reserva exigida.</small>`;
+        ? `${t('bud.noRes')}<small>${t('bud.noRes.d', { pct: P.o2ReservePct })}</small>`
+        : `${t('bud.noO2')}<small>${t('bud.noO2.d', { time: fmtTime(T.noReturn.t) })}</small>`;
   const cell = (k, v) => `<div class="cell"><span>${k}</span><b>${v}</b></div>`;
   b.innerHTML =
-    cell('Distancia', num(T.dist / 1000, 2) + ' km') + cell('Duración', fmtTime(T.time)) +
-    cell('Subida / bajada', `${T.up.toFixed(0)} / ${T.down.toFixed(0)} m`) + cell('Energía metabólica', num(T.energy / 1e6, 1) + ' MJ') +
-    cell('Oxígeno usado', `${num(T.o2, 2)} kg · ${(100 - T.o2LeftPct).toFixed(0)} %`) + cell('Margen mínimo de O₂', (T.minMargin * 1000).toFixed(0) + ' g') +
-    cell('Dosis de radiación', (T.dose * 1000).toFixed(0) + ' µSv') + cell('Regreso a pie máximo', fmtTime(T.maxBack));
+    cell(t('k.dist'), num(T.dist / 1000, 2) + ' km') + cell(t('k.time'), fmtTime(T.time)) +
+    cell(t('bud.updown'), `${T.up.toFixed(0)} / ${T.down.toFixed(0)} m`) + cell(t('bud.energy'), num(T.energy / 1e6, 1) + ' MJ') +
+    cell(t('bud.o2used'), `${num(T.o2, 2)} kg · ${(100 - T.o2LeftPct).toFixed(0)} %`) + cell(t('bud.o2margin'), (T.minMargin * 1000).toFixed(0) + ' g') +
+    cell(t('bud.dose'), (T.dose * 1000).toFixed(0) + ' µSv') + cell(t('bud.maxback'), fmtTime(T.maxBack));
 }
 
 function selectStop(s, focus = false) {
@@ -339,11 +359,11 @@ function drawStops() {
   const box = $('stops'); box.innerHTML = '';
   const sorted = [...A.stops].sort((a, b) => (a.order || 99) - (b.order || 99));
   for (const s of sorted) {
-    const why = !s.on ? 'desactivada' : A.omitted.includes(s) ? 'omitida por la reserva de O₂' : A.unreachable.includes(s) ? 'inalcanzable' : s.sub;
+    const why = !s.on ? t('stop.off') : A.omitted.includes(s) ? t('stop.omitted') : A.unreachable.includes(s) ? t('stop.unreach') : s.sub;
     const d = document.createElement('div'); d.className = 'stop' + (s === A.selected ? ' sel' : '');
     d.innerHTML = `<input type="checkbox" ${s.on ? 'checked' : ''}><span class="badge ${s.order ? '' : 'off'}">${s.order || '–'}</span>
       <span class="nm">${s.name}<small>${why}</small></span>
-      ${s.photos && s.photos.length ? '<button class="ph">Fotos</button>' : ''}${s.custom ? '<button class="rm">✕</button>' : ''}`;
+      ${s.photos && s.photos.length ? `<button class="ph">${t('stop.photos')}</button>` : ''}${s.custom ? '<button class="rm">✕</button>' : ''}`;
     d.querySelector('input').onchange = (e) => { s.on = e.target.checked; replan(); };
     const ph = d.querySelector('.ph'); if (ph) ph.onclick = () => showPhotos(s);
     const rm = d.querySelector('.rm'); if (rm) rm.onclick = () => { A.stops.splice(A.stops.indexOf(s), 1); replan(); };
@@ -357,15 +377,19 @@ function drawStopCard() {
   const s = A.selected, box = $('stopCard');
   if (!s) { box.innerHTML = ''; return; }
   const ph = s.photos && s.photos[0];
-  box.innerHTML = `<h3>${s.name}</h3><p>${s.sub}</p>` + (ph
-    ? `<div class="ph"><img src="data/${ph.file}" alt="Foto de Curiosity en ${s.name}"><span class="cap">Foto de Curiosity · sol ${ph.sol}</span></div>`
-    : '<p>Sin fotos de Curiosity en este punto.</p>');
+  const rel = t('card.rel', { v: `${s.sci.relieve_m > 0 ? '+' : ''}${num(s.sci.relieve_m, 1)}` });
+  box.innerHTML = `<h3>${s.name}</h3><p>${s.sub}</p>
+    <div class="sci"><b>${t('card.obj')}</b> <em class="prop">${t('tag.prop')}</em>
+      <p>${s.sci.objetivo}</p><p class="task">▸ ${s.sci.tarea}</p>
+      <p class="rel">${t('card.point', { lugar: s.sci.lugar, rel })} <em class="der">${t('tag.der')}</em></p></div>` + (ph
+    ? `<div class="ph"><img src="data/${ph.file}" alt="${t('card.alt', { name: s.name })}"><span class="cap">${t('card.cap', { sol: ph.sol })}</span></div>`
+    : `<p>${t('card.nophoto')}</p>`);
   const el = box.querySelector('.ph'); if (el) el.onclick = () => showPhotos(s);
 }
 
 function showPhotos(s) {
-  $('photoImgs').innerHTML = s.photos.map((p) => `<img src="data/${p.file}" alt="Foto de Curiosity, sol ${p.sol}">`).join('');
-  $('photoCap').innerHTML = `<b>${s.name}</b> — lo que verás al llegar. Imágenes reales tomadas por Curiosity en este lugar: ` +
+  $('photoImgs').innerHTML = s.photos.map((p) => `<img src="data/${p.file}" alt="${t('photo.alt', { sol: p.sol })}">`).join('');
+  $('photoCap').innerHTML = `<b>${s.name}</b>${t('photo.cap')}` +
     s.photos.map((p) => `${p.instrument.startsWith('MAST') ? 'Mastcam' : 'Navcam'}, sol ${p.sol} (${p.date.slice(0, 10)}), ${p.credit}`).join(' · ');
   $('photo').hidden = false;
 }
@@ -408,21 +432,21 @@ function drawProfile() {
 
 // Panel de entorno: clima REMS, radiacion RAD, clima espacial DONKI
 function buildEnv() {
-  const w = A.weather.latest, r = A.radiation;
+  const w = A.weather.latest, r = A.radiation, es = lang === 'es';      // los textos de radiation.json vienen en español
   const eva = (r.gcr_dose_equivalent_mSv_per_day / 24) * 1000;
   $('env').innerHTML = `
-    <div class="card"><h3>Clima en Gale <em>Observación · REMS</em></h3>
-      <p>Última medición: <b>sol ${w.sol}</b> (${w.terrestrial_date})</p>
-      <p>Aire <b>${w.min_temp} a ${w.max_temp} °C</b> · suelo <b>${w.min_gts_temp} a ${w.max_gts_temp} °C</b></p>
-      <p>Presión <b>${w.pressure} Pa</b> · cielo <b>${w.atmo_opacity === 'Sunny' ? 'despejado' : w.atmo_opacity}</b> · UV <b>${({ Low: 'bajo', Moderate: 'moderado', High: 'alto', Very_High: 'muy alto' })[w.local_uv_irradiance_index] || w.local_uv_irradiance_index}</b></p>
-      <p>Amanecer ${w.sunrise} · atardecer ${w.sunset} · Ls ${w.ls}°</p></div>
-    <div class="card"><h3>Radiación en superficie <em>Observación · RAD</em></h3>
-      <p>Rayos cósmicos: <b>${num(r.gcr_dose_equivalent_mSv_per_day, 2)} ± ${num(r.gcr_dose_equivalent_uncertainty, 2)} mSv/día</b> (≈ ${eva.toFixed(0)} µSv por hora de caminata)</p>
-      <p>${r.sep_event_note}</p>
-      <p>Referencia: ${r.career_limit_source}</p><p style="font-size:10.5px">Fuente: Hassler et al. 2014, <i>Science</i>.</p></div>
-    <div class="card"><h3>Clima espacial <em>Observación · DONKI</em></h3><p id="donkiState"></p><div class="donki" id="donkiList"></div>
-      <p style="font-size:10.5px">DONKI vigila el Sol desde el entorno de la Tierra; las eyecciones dirigidas a Marte se resaltan.</p></div>`;
-  showDonki(A.donki.notifications, `copia guardada (${(A.donki.fetched || '').slice(0, 10)})`);
+    <div class="card"><h3>${t('env.weather')} <em>${t('tag.obs')} · REMS</em></h3>
+      <p>${t('env.last')} <b>sol ${w.sol}</b> (${w.terrestrial_date})</p>
+      <p>${t('env.air')} <b>${w.min_temp} ${t('env.to')} ${w.max_temp} °C</b> · ${t('env.ground')} <b>${w.min_gts_temp} ${t('env.to')} ${w.max_gts_temp} °C</b></p>
+      <p>${t('env.pressure')} <b>${w.pressure} Pa</b> · ${t('env.sky')} <b>${w.atmo_opacity === 'Sunny' ? t('env.sunny') : w.atmo_opacity}</b> · UV <b>${({ Low: t('uv.Low'), Moderate: t('uv.Moderate'), High: t('uv.High'), Very_High: t('uv.Very_High') })[w.local_uv_irradiance_index] || w.local_uv_irradiance_index}</b></p>
+      <p>${t('env.sunrise')} ${w.sunrise} · ${t('env.sunset')} ${w.sunset} · Ls ${w.ls}°</p></div>
+    <div class="card"><h3>${t('env.rad')} <em>${t('tag.obs')} · RAD</em></h3>
+      <p>${t('env.gcr')} <b>${num(r.gcr_dose_equivalent_mSv_per_day, 2)} ± ${num(r.gcr_dose_equivalent_uncertainty, 2)} ${t('env.perDay')}</b> ${t('env.perHour', { n: eva.toFixed(0) })}</p>
+      <p>${es ? r.sep_event_note : t('env.sepNote')}</p>
+      <p>${t('env.reference')} ${es ? r.career_limit_source : t('env.career')}</p><p style="font-size:10.5px">${t('env.source')}</p></div>
+    <div class="card"><h3>${t('env.space')} <em>${t('tag.obs')} · DONKI</em></h3><p id="donkiState"></p><div class="donki" id="donkiList"></div>
+      <p style="font-size:10.5px">${t('env.donkiNote')}</p></div>`;
+  showDonki(A.donki.notifications, t('env.saved', { date: (A.donki.fetched || '').slice(0, 10) }));
   const start = new Date(Date.now() - 14 * 864e5).toISOString().slice(0, 10);     // intento en vivo desde el navegador
   fetch(`https://api.nasa.gov/DONKI/notifications?startDate=${start}&type=all&api_key=DEMO_KEY`)
     .then((r) => (r.ok ? r.json() : Promise.reject()))
@@ -430,14 +454,14 @@ function buildEnv() {
       const rows = list.map((n) => ({ type: n.messageType, id: n.messageID, time: n.messageIssueTime, url: n.messageURL,
         summary: (n.messageBody.split('## Summary:')[1] || '').trim().split('\n\n').slice(0, 2).join(' ').replace(/\s+/g, ' ').slice(0, 320) }));
       rows.sort((a, b) => (a.time < b.time ? 1 : -1));
-      if (rows.length) showDonki(rows, 'en vivo, últimos 14 días');
+      if (rows.length) showDonki(rows, t('env.live'));
     }).catch(() => {});
 }
-const DONKI_NAMES = { CME: 'Eyección de masa coronal', FLR: 'Fulguración', SEP: 'Partículas energéticas', GST: 'Tormenta geomagnética', RBE: 'Cinturón de radiación', IPS: 'Choque interplanetario', Report: 'Informe semanal' };
+const DONKI_NAMES = Object.fromEntries(['CME', 'FLR', 'SEP', 'GST', 'RBE', 'IPS', 'Report'].map((k) => [k, t('donki.' + k)]));      // (los resumenes de los avisos ya vienen en ingles de NASA)
 function showDonki(rows, state) {
   A.donkiRows = rows; A.donkiState = state;
   const mars = rows.filter((r) => /Mars/.test(r.summary)).length;
-  $('donkiState').innerHTML = `<b>${rows.length}</b> avisos · <b>${mars}</b> mencionan Marte · ${state}`;
+  $('donkiState').innerHTML = `<b>${rows.length}</b> ${t('env.notices')} · <b>${mars}</b> ${t('env.mention')} · ${state}`;
   $('donkiList').innerHTML = rows.slice(0, 12).map((r) =>
     `<div class="${/Mars/.test(r.summary) ? 'mars' : ''}"><a href="${r.url}" target="_blank" rel="noopener">${r.time.slice(0, 10)} · ${DONKI_NAMES[r.type] || r.type}</a></div>`).join('');
 }
@@ -457,7 +481,7 @@ function pickGround(ev) {
 
 function wireUi() {
   let adding = false, downAt = null, nCustom = 0;
-  $('btnAdd').onclick = () => { adding = !adding; $('btnAdd').classList.toggle('on', adding); $('btnAdd').textContent = adding ? 'Haz clic en el terreno…' : '＋ Añadir parada'; };
+  $('btnAdd').onclick = () => { adding = !adding; $('btnAdd').classList.toggle('on', adding); $('btnAdd').textContent = adding ? t('btn.adding') : t('btn.add'); };
   const cv = A.renderer.domElement;
   cv.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
   cv.addEventListener('pointerup', (e) => {
@@ -465,11 +489,23 @@ function wireUi() {
     if (Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return;   // fue un arrastre de camara
     const p = pickGround(e); if (!p) return;
     nCustom++;
-    const s = { id: 'C' + nCustom, name: `Parada propia ${nCustom}`, sub: 'Elegida por la tripulación', x: p.x, z: p.z, photos: [], on: true, custom: true };
+    const s = { id: 'C' + nCustom, name: t('stop.custom', { n: nCustom }), sub: t('stop.crew'), x: p.x, z: p.z, photos: [], on: true, custom: true,
+      sci: scienceFor(A.terrain, p.x, p.z) };
     A.stops.push(s); A.selected = s;
-    adding = false; $('btnAdd').classList.remove('on'); $('btnAdd').textContent = '＋ Añadir parada';
+    adding = false; $('btnAdd').classList.remove('on'); $('btnAdd').textContent = t('btn.add');
     replan();
   });
+  // tarjetas plegables: [boton, caja que recibe la clase, clase, flecha abierta, flecha plegada]
+  for (const [id, box, cls, open, shut] of [['foldLeft', $('app'), 'noleft', '◀', '▶'], ['foldRight', $('app'), 'noright', '▶', '◀'], ['foldProf', $('mapCell'), 'noprof', '▼', '▲']]) {
+    const b = $(id);
+    const set = (off) => {
+      box.classList.toggle(cls, off); b.textContent = off ? shut : open;
+      b.title = off ? t('fold.show') : t('fold.hide'); b.setAttribute('aria-expanded', String(!off));
+      store('mw_' + cls, off ? '1' : ''); layout();      // layout() ajusta el mapa al nuevo hueco
+    };
+    b.onclick = () => set(!box.classList.contains(cls));
+    set(recall('mw_' + cls) === '1');
+  }
   // pestañas del panel derecho
   for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => {
     for (const k of document.querySelectorAll('.tabs button')) k.classList.toggle('on', k === b);
@@ -484,7 +520,7 @@ function wireUi() {
     if (A.event) return clearEvent();
     const s = (A.selected && A.selected.order) ? A.selected : A.plan && A.plan.order[0];
     const info = s && setEvent(s, true);
-    addMsg('tars', info ? localReply('simular_evento_solar', info) : 'No hay ruta sobre la que simular el evento.');
+    addMsg('tars', info ? localReply('simular_evento_solar', info) : t('tars.noSim'));
   };
   $('btnBack').onclick = () => {
     if (!A.event) return;
@@ -546,7 +582,7 @@ function hudSummary() {
   return { tiempo_min: Math.round(s.t / 60), distancia_recorrida_km: +(s.dist / 1000).toFixed(2),
     o2_restante_pct: Math.round((1 - s.o2 / P.o2TankKg) * 100), margen_regreso_o2_g: Math.round(s.margin * 1000),
     regreso_a_pie_min: Math.round(s.back / 60), dosis_uSv: +(s.dose * 1000).toFixed(1),
-    siguiente: s.dwell ? `en ${s.dwell.name} (ciencia en curso)` : next ? next.arrive.name : 'hábitat',
+    siguiente: s.dwell ? t('hud.inStop', { name: s.dwell.name }) : next ? next.arrive.name : t('hab'),
     distancia_siguiente_m: Math.round(((next || end).dist - s.dist)), pendiente_grados: Math.round(s.stepSlope || 0),
     elevacion_m: Math.round(A.terrain.heightAt(s.x, s.z) + A.eRef),
     hora_local: `${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')} LMST`,
@@ -556,7 +592,7 @@ function hudSummary() {
 // Ejecuta una herramienta de TARS sobre el estado real de la app
 async function runTool(name, input) {
   const hud = document.body.dataset.mode === 'hud';
-  const soloPlan = { error: 'Esa orden cambia el plan y solo está disponible en el planificador, antes de salir.' };
+  const soloPlan = { error: t('err.planOnly') };
   switch (name) {
     case 'estado_mision': { const o = planSummary(); if (hud) o.casco = hudSummary(); return o; }
     case 'entorno': {
@@ -571,11 +607,13 @@ async function runTool(name, input) {
         nota: 'DONKI observa desde el entorno de la Tierra; no es un pronóstico para Marte.' } };
     }
     case 'info_parada': {
-      const s = findStop(input.parada); if (!s) return { error: `No conozco la parada "${input.parada}".` };
+      const s = findStop(input.parada); if (!s) return { error: t('err.noStop', { q: input.parada }) };
       const c = A.nav.cellOf(s.x, s.z), back = A.backField.time[c];
       return { id: s.id, nombre: s.name, descripcion: s.sub, en_la_ruta: Boolean(s.order), orden: s.order, activa: s.on,
         elevacion_m: Math.round(A.terrain.heightAt(s.x, s.z) + A.eRef), pendiente_grados: Math.round(A.nav.S[c]),
-        regreso_a_pie_min: back === Infinity ? null : Math.round(back / 60), fotos_de_curiosity: (s.photos || []).length };
+        regreso_a_pie_min: back === Infinity ? null : Math.round(back / 60), fotos_de_curiosity: (s.photos || []).length,
+        ciencia: { pregunta_de_la_caminata: PREGUNTA, situacion: s.sci.lugar, relieve_m: s.sci.relieve_m, objetivo: s.sci.objetivo, tarea: s.sci.tarea,
+          nota: 'El relieve se deriva del DEM de HiRISE. El objetivo y la tarea son una propuesta del equipo, no resultados de Curiosity.' } };
     }
     case 'fijar_reserva_o2': {
       if (hud) return soloPlan;
@@ -585,77 +623,83 @@ async function runTool(name, input) {
     }
     case 'activar_parada': {
       if (hud) return soloPlan;
-      const s = findStop(input.parada); if (!s) return { error: `No conozco la parada "${input.parada}".` };
+      const s = findStop(input.parada); if (!s) return { error: t('err.noStop', { q: input.parada }) };
       s.on = Boolean(input.activa); replan();
       return { parada: s.name, activa: s.on, ...planSummary() };
     }
     case 'simular_evento_solar':
     case 'regresar_al_habitat': {
       const solar = name === 'simular_evento_solar';
-      if (hud) return hudReturn(solar) || { error: 'Ya estás volviendo al hábitat o no hay ruta de regreso desde aquí.' };
+      if (hud) return hudReturn(solar) || { error: t('err.alreadyBack') };
       const s = findStop(input.parada) || ((A.selected && A.selected.order) ? A.selected : A.plan && A.plan.order[0]);
-      if (!s || !s.order) return { error: 'Esa parada no está en la ruta actual.' };
-      return setEvent(s, solar) || { error: 'No hay ruta de regreso desde esa parada.' };
+      if (!s || !s.order) return { error: t('err.notInRoute') };
+      return setEvent(s, solar) || { error: t('err.noBack') };
+    }
+    case 'salud_astronauta': {
+      const nota = 'Constantes SIMULADAS por un modelo a partir del esfuerzo de la ruta; en esta demo no hay sensores reales.';
+      if (hud) return { momento: 'ahora', ...vitals(A.nav, A.hudTl, H.t), nota };
+      if (!A.tl) return { error: t('err.noEffort') };
+      let pico = null;                       // en el planificador: el momento de mas esfuerzo de la ruta
+      for (let t = 0; t <= A.tl.total.time; t += 60) { const v = vitals(A.nav, A.tl, t); if (!pico || v.fc_lpm > pico.fc_lpm) pico = { ...v, t }; }
+      return { momento: 'previsión para la ruta planificada', fc_maxima_lpm: pico.fc_lpm, en_el_minuto: Math.round(pico.t / 60),
+        respiracion_maxima_rpm: pico.respiracion_rpm, esfuerzo_maximo_W: pico.esfuerzo_W, estado_en_el_pico: pico.estado, nota };
     }
     case 'mostrar_capa': {
-      const L = LAYERS.find((k) => k.id === input.capa); if (!L) return { error: `No existe la capa "${input.capa}".` };
+      const L = LAYERS.find((k) => k.id === input.capa); if (!L) return { error: t('err.noLayer', { q: input.capa }) };
       L.set(Boolean(input.visible)); return { capa: L.name, visible: Boolean(input.visible) };
     }
-    default: return { error: `Herramienta desconocida: ${name}` };
+    default: return { error: t('err.noTool', { name }) };
   }
 }
 
 function addMsg(who, text, cls = '') {
   const d = document.createElement('div'); d.className = `msg ${who} ${cls}`;
-  d.innerHTML = `<div class="who">${who === 'tars' ? '🤖 TARS' : '👤 Tú'}</div><div class="txt"></div>`;
+  d.innerHTML = `<div class="who">${who === 'tars' ? '🤖 TARS' : t('chat.you')}</div><div class="txt"></div>`;
   d.querySelector('.txt').textContent = text;
   $('chat').appendChild(d); $('chat').scrollTop = 1e9;
   return d.querySelector('.txt');
 }
 
-// Ordenes rapidas: con IA se envian como texto; sin IA ejecutan la herramienta directamente
+// Ordenes rapidas: cada boton ejecuta su herramienta directamente
 const QUICK = [
-  { label: 'Estado', text: '¿Cómo va el plan de la misión?', tool: 'estado_mision', input: {} },
-  { label: 'Reserva O₂ 30 %', text: 'Replanifica con una reserva mínima de 30 % de O₂.', tool: 'fijar_reserva_o2', input: { porcentaje: 30 } },
-  { label: 'Reserva O₂ 75 %', text: 'Replanifica con una reserva mínima de 75 % de O₂.', tool: 'fijar_reserva_o2', input: { porcentaje: 75 } },
-  { label: 'Sin reserva', text: 'Quita la reserva mínima de O₂ y replanifica.', tool: 'fijar_reserva_o2', input: { porcentaje: 0 } },
-  { label: 'Entorno', text: '¿Cómo están el clima y la radiación?', tool: 'entorno', input: {} },
+  { label: t('quick.status'), text: t('quick.status.q'), tool: 'estado_mision', input: {} },
+  { label: t('quick.r30'), text: t('quick.r30.q'), tool: 'fijar_reserva_o2', input: { porcentaje: 30 } },
+  { label: t('quick.r75'), text: t('quick.r75.q'), tool: 'fijar_reserva_o2', input: { porcentaje: 75 } },
+  { label: t('quick.r0'), text: t('quick.r0.q'), tool: 'fijar_reserva_o2', input: { porcentaje: 0 } },
+  { label: t('quick.env'), text: t('quick.env.q'), tool: 'entorno', input: {} },
+  { label: t('quick.health'), text: t('quick.health.q'), tool: 'salud_astronauta', input: {} },
 ];
 // Sin IA y por voz o texto libre: se reconoce la intencion por palabras clave
 function offlineIntent(text) {
   const t = text.toLowerCase();
-  const pct = (t.match(/(\d{1,2})\s*(%|por ciento)/) || [])[1];
-  if (/reserva/.test(t) && pct) return ['fijar_reserva_o2', { porcentaje: +pct }];
-  if (/solar|tormenta/.test(t)) return ['simular_evento_solar', { parada: '' }];
-  if (/volver|regres|h[aá]bitat/.test(t)) return ['regresar_al_habitat', {}];
-  if (/clima|temperatura|radiaci|fr[ií]o|presi[oó]n/.test(t)) return ['entorno', {}];
+  const pct = (t.match(/(\d{1,2})\s*(%|por ciento|percent)/) || [])[1];
+  if (/reserv/.test(t) && pct) return ['fijar_reserva_o2', { porcentaje: +pct }];
+  if (/solar|tormenta|storm/.test(t)) return ['simular_evento_solar', { parada: '' }];
+  if (/volver|regres|h[aá]bitat|return|\bback\b|habitat/.test(t)) return ['regresar_al_habitat', {}];
+  if (/salud|pulso|coraz|cansa|fatiga|vitales|health|pulse|heart|tired|vitals/.test(t)) return ['salud_astronauta', {}];
+  if (/clima|temperatura|radiaci|fr[ií]o|presi[oó]n|weather|temperature|radiation|pressure|environment/.test(t)) return ['entorno', {}];
   return ['estado_mision', {}];
 }
 
 async function tarsSay(text) {
-  if (A.tars.isOnline()) return A.tars.ask(text);
   const [tool, input] = offlineIntent(text);
   return localReply(tool, await runTool(tool, input));
 }
 
 function setupTars() {
-  A.tars = createTars(runTool);
-  A.tars.ready.then((ok) => {
-    $('tarsState').innerHTML = ok
-      ? `<b>IA conectada</b> · ${A.tars.model()}`
-      : '<b class="off">Sin IA en este sitio</b> · TARS responde con órdenes básicas. Para la IA, ejecuta la app en tu equipo con tu clave en <code>.env.local</code>.';
-    $('hTarsState').textContent = ok ? 'IA conectada' : 'modo básico, sin IA';
-    addMsg('tars', ok ? 'TARS en línea. Pídeme un cambio de plan o un dato de la misión.' : 'TARS en modo básico. Usa las órdenes rápidas o escribe una palabra clave: estado, reserva 30 %, entorno, evento solar.');
-  });
+  // TARS simulado: respuestas locales armadas con los datos de la app (sin IA ni conexion)
+  $('tarsState').innerHTML = `<b class="off">${t('tars.sim')}</b> · ${t('tars.simDetail')}`;
+  $('hTarsState').textContent = t('tars.hudSim');
+  addMsg('tars', t('tars.helloBasic'));
   const q = $('quick');
   for (const k of QUICK) { const b = document.createElement('button'); b.textContent = k.label; b.onclick = () => chatAsk(k.text, k); q.appendChild(b); }
 
   // conversacion en el planificador
   async function chatAsk(text, quick = null, speak = false) {
     if (A.busy) return; A.busy = true;
-    addMsg('tu', text); const wait = addMsg('tars', 'Pensando…', 'wait');
+    addMsg('tu', text); const wait = addMsg('tars', t('chat.thinking'), 'wait');
     try {
-      const reply = (quick && !A.tars.isOnline()) ? localReply(quick.tool, await runTool(quick.tool, quick.input)) : await tarsSay(text);
+      const reply = quick ? localReply(quick.tool, await runTool(quick.tool, quick.input)) : await tarsSay(text);
       wait.textContent = reply; wait.parentElement.classList.remove('wait');
       if (speak) A.voice.speak(reply);
     } catch (e) { wait.textContent = e.message; wait.parentElement.classList.replace('wait', 'err'); }
@@ -683,13 +727,20 @@ function setupTars() {
       const rec = st === 'escuchando';
       mics.forEach((m) => m.classList.toggle('rec', rec));
       if (document.body.dataset.mode === 'hud') {
-        if (rec) $('hTarsYou').textContent = '🎙 ' + (txt || 'escuchando…');
+        if (rec) $('hTarsYou').textContent = '🎙 ' + (txt || t('hud.listening'));
         else if (st === 'error') $('hTarsSay').textContent = txt;
       } else if (rec) $('tarsIn').value = txt; else if (st === 'error') addMsg('tars', txt, 'err');
     },
   });
+  // dialogo simulado TARS <-> astronauta en la vista de casco (guion en ingles, src/tars-dialog.js)
+  A.dialog = createDialog(A.voice, (who, text) => {
+    if (!who) { $('hSub').hidden = true; return; }
+    $('hSubWho').textContent = who === 'EV1' ? 'ASTRONAUT · EV1' : 'TARS';
+    $('hSubWho').className = who === 'EV1' ? 'ev1' : '';
+    $('hSubText').textContent = text; $('hSub').hidden = false;
+  });
   if (!A.voice.supported) {
-    $('tarsMic').hidden = true; $('hMic').disabled = true; $('hMic').textContent = 'Voz no disponible en este navegador';
+    $('tarsMic').hidden = true; $('hMic').disabled = true; $('hMic').textContent = t('voice.none');
   } else {
     for (const m of mics) {
       m.addEventListener('pointerdown', (e) => { e.preventDefault(); A.voice.start(); });
@@ -705,13 +756,14 @@ function setupTars() {
 // =====================================================================
 //  VISTA DE CASCO (HUD)
 // =====================================================================
-const H = { t: 0, playing: true, speed: 30, lookYaw: 0, lookPitch: 0, heading: 0, phase: 0 };
+const H = { t: 0, playing: true, speed: 10, o2: 100, lookYaw: 0, lookPitch: 0, heading: 0, phase: 0 };
 A.H = H;
 
 function enterHud() {
   if (!A.tl) return;
-  A.hudTl = A.tl; A.sep = false; A.returning = false; H.t = 0; H.playing = true; H.lookYaw = 0; H.lookPitch = -0.05;
+  A.hudTl = A.tl; A.sep = false; A.returning = false; H.tipKey = null; H.t = 0; H.playing = true; H.lookYaw = 0; H.lookPitch = -0.05;
   $('hPlay').textContent = '⏸'; $('hSep').disabled = false;
+  H.o2 = 100; H.speed = +$('hSpeed').value; A.dialog.reset(); $('hSub').hidden = true;
   document.body.dataset.mode = 'hud';
   A.controls.enabled = false;
   A.savedCam = { p: A.camera.position.clone(), t: A.controls.target.clone() };
@@ -728,8 +780,8 @@ function exitHud() {
   A.camera.position.copy(A.savedCam.p); A.controls.target.copy(A.savedCam.t);
   A.scene.background = null; A.terrain.uniforms.uFogDensity.value = 0;
   A.routeLine.material.linewidth = 4.5; A.backArrows.visible = true;
-  $('hudPhoto').hidden = true; $('labels').innerHTML = '';
-  window.speechSynthesis?.cancel();
+  $('hudPhoto').hidden = true; $('hSub').hidden = true; $('labels').innerHTML = '';
+  A.dialog.reset();                  // corta la voz y vacia la conversacion simulada
   setSun(EVA_START_H); layout();
   drawRoute(); drawBack(); requestAnimationFrame(drawProfile);
 }
@@ -743,7 +795,7 @@ function hudReturn(solar) {
   if (!cells || cells.length < 2) return null;
   A.returning = true; A.sep = solar; $('hSep').disabled = true;
   const back = A.nav.buildTimeline([{ cells, toStop: null }], A.doseRate * (solar ? 2 : 1), A.backField);
-  const info = { desde: 'tu posición actual', regreso_min: Math.round(back.total.time / 60), distancia_regreso_m: Math.round(back.total.dist),
+  const info = { desde: t('here'), regreso_min: Math.round(back.total.time / 60), distancia_regreso_m: Math.round(back.total.dist),
     o2_al_llegar_pct: Math.round((1 - (s.o2 + back.total.o2) / P.o2TankKg) * 100), dosis_duplicada: solar,
     nota: 'Tiempos y oxígeno son estimaciones del modelo.' };
   for (const p of back.pts) { p.t += s.t; p.dist += s.dist; p.o2 += s.o2; p.energy += s.energy; p.dose += s.dose; p.margin -= s.o2; }
@@ -762,7 +814,12 @@ function smoothPos(tl, t) {       // posicion suavizada para que la camara no zi
 
 function updateHud(dt) {
   const tl = A.hudTl, nav = A.nav, T = tl.total.time;
-  if (H.playing) H.t = Math.min(T, H.t + dt * H.speed);
+  // mientras TARS y el astronauta hablan, la caminata va a ×1 para poder escucharlos
+  const hablando = A.dialog.talking();
+  if (H.playing) H.t = Math.min(T, H.t + dt * (hablando ? 1 : H.speed));
+  // Oxigeno de DEMOSTRACION: baja 1 % cada 2 s reales para que el publico lo vea (no es el modelo).
+  // Se detiene mientras hablan, para que lo que dice TARS coincida con lo que se ve.
+  if (H.playing && H.t < T && !hablando) H.o2 = Math.max(40, H.o2 - dt * 0.5);
   const s = nav.sample(tl, H.t);
   const p = smoothPos(tl, H.t), ahead = smoothPos(tl, H.t + 10);
   const moving = Math.hypot(ahead.x - p.x, ahead.z - p.z) > 0.5 && !s.dwell;
@@ -792,15 +849,15 @@ function updateHud(dt) {
   const hh = Math.floor(hour), mm = Math.floor((hour - hh) * 60);
 
   const left = Math.max(0, 1 - s.o2 / P.o2TankKg);
-  $('hO2').textContent = (left * 100).toFixed(0) + ' %';
-  $('hO2bar').style.width = left * 100 + '%';
-  $('hO2bar').style.background = left > 0.4 ? 'var(--ok)' : left > 0.2 ? 'var(--warn)' : 'var(--bad)';
-  $('hMargin').textContent = (s.margin * 1000).toFixed(0) + ' g O₂';
+  $('hO2').innerHTML = H.o2.toFixed(0) + ' %<small>SIM</small>';
+  $('hO2bar').style.width = H.o2 + '%';
+  $('hO2bar').style.background = H.o2 > 60 ? 'var(--ok)' : 'var(--warn)';
+  $('hMargin').textContent = t('hud.o2g', { g: (s.margin * 1000).toFixed(0) });
   $('hMargin').style.color = s.margin < 0 ? 'var(--bad)' : s.margin < 0.05 ? 'var(--warn)' : '';
   $('hTime').textContent = fmtTime(s.t);
   $('hClock').textContent = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')} LMST`;
   $('hDose').textContent = num(s.dose * 1000, 1) + ' µSv';
-  $('hTemp').textContent = airTemp(hour).toFixed(0) + ' °C (est.)';
+  $('hTemp').textContent = airTemp(hour).toFixed(0) + ' °C ' + t('hud.estAbbr');
   $('hSlope').textContent = (Math.round(moving ? s.stepSlope : 0) || 0) + '°';
   $('hElev').textContent = (y + A.eRef).toFixed(0) + ' m';
   $('hDist').textContent = num(s.dist / 1000, 2) + ' km';
@@ -809,39 +866,70 @@ function updateHud(dt) {
   let next = null;
   for (let i = s.i + 1; i < tl.pts.length; i++) if (tl.pts[i].arrive) { next = tl.pts[i]; break; }
   const end = tl.pts[tl.pts.length - 1];
-  $('hNext').textContent = s.dwell ? `EN ${s.dwell.name.toUpperCase()}` : next ? next.arrive.name.toUpperCase() : 'HÁBITAT';
-  $('hNextD').textContent = s.dwell ? 'ciencia en curso' : (((next || end).dist - s.dist)).toFixed(0) + ' m';
+  $('hNext').textContent = s.dwell ? t('hud.at', { name: s.dwell.name.toUpperCase() }) : next ? next.arrive.name.toUpperCase() : t('hud.habitat');
+  $('hNextD').textContent = s.dwell ? t('hud.sciNow') : (((next || end).dist - s.dist)).toFixed(0) + ' m';
+
+  // Salud simulada del astronauta e indicacion automatica de TARS (reglas locales, sin IA)
+  const v = vitals(nav, tl, H.t);
+  $('hHr').textContent = v.fc_lpm + ' ' + t('u.hr'); $('hHr').style.color = ['', 'var(--warn)', 'var(--bad)'][v.nivel];
+  $('hResp').textContent = v.respiracion_rpm + ' ' + t('u.resp');
+  $('hBodyT').textContent = num(v.temperatura_corporal_C, 1) + ' °C';
+  $('hLoad').textContent = v.esfuerzo_W + ' W';
+  tarsGuide(guidance({ fin: H.t >= T, alertaSolar: A.sep, regresando: A.returning, margen: s.margin, o2Pct: left * 100, salud: v,
+    enMarcha: moving, pendiente: s.stepSlope || 0, parada: s.dwell ? s.dwell.name : null, tarea: s.dwell && s.dwell.sci ? s.dwell.sci.tarea : '',
+    siguiente: next ? next.arrive.name : null, distancia: (next || end).dist - s.dist }));
+
+  // Conversacion simulada: pendiente de 10° o mas en los proximos 40 m y datos del momento
+  // (la ruta ya evita las de mas de 15°, asi que el aviso hablado empieza antes)
+  let slope = 0, slopeM = 0;
+  if (moving) for (let k = 5; k <= 60; k += 5) {
+    const a = nav.sample(tl, Math.min(T, H.t + k)), m = a.dist - s.dist;
+    if (m > 40) break;
+    if (!a.dwell && Math.abs(a.stepSlope || 0) >= 10) { slope = Math.round(Math.abs(a.stepSlope)); slopeM = Math.max(5, Math.round(m)); break; }
+  }
+  A.dialog.update(H.playing ? dt : 0, {
+    o2: H.o2, hr: v.fc_lpm, resp: v.respiracion_rpm, temp: v.temperatura_corporal_C.toFixed(1),
+    km: ((end.dist - s.dist) / 1000).toFixed(1), min: Math.round((T - H.t) / 60), back: Math.round(s.back / 60),
+    o2Fin: Math.round(Math.max(40, H.o2 - ((T - H.t) / H.speed) * 0.5)),      // al ritmo de la demo
+    slope, slopeM, simT: H.t, stop: s.dwell ? s.dwell.name : null, fin: H.t >= T,
+  });
 
   const al = [];
-  if (A.sep) al.push(['bad', 'ALERTA SOLAR — REGRESO INMEDIATO AL HÁBITAT · DOSIS ×2']);
-  else if (A.returning && H.t < T) al.push(['info', 'REGRESO AL HÁBITAT POR LA RUTA MÁS RÁPIDA']);
-  if (s.margin < 0) al.push(['bad', 'OXÍGENO INSUFICIENTE PARA VOLVER A PIE CON RESERVA']);
-  if (moving && Math.abs(s.stepSlope) >= 15) al.push(['warn', `PENDIENTE ${Math.abs(s.stepSlope).toFixed(0)}° — PASO CORTO`]);
-  if (s.dwell) al.push(['info', `PARADA CIENTÍFICA: ${s.dwell.name} — ${P.stopMinutes} min de muestreo`]);
-  if (H.t >= T) al.push(['info', 'DE VUELTA EN EL HÁBITAT — CAMINATA COMPLETADA']);
+  if (A.sep) al.push(['bad', t('hud.alertSolar')]);
+  else if (A.returning && H.t < T) al.push(['info', t('hud.alertReturn')]);
+  if (s.margin < 0) al.push(['bad', t('hud.alertO2')]);
+  if (moving && Math.abs(s.stepSlope) >= 15) al.push(['warn', t('hud.alertSlope', { n: Math.abs(s.stepSlope).toFixed(0) })]);
+  if (s.dwell) al.push(['info', t('hud.alertStop', { name: s.dwell.name, min: P.stopMinutes })]);
+  if (H.t >= T) al.push(['info', t('hud.alertEnd')]);
   const html = al.map(([c, t]) => `<div class="${c}">${t}</div>`).join('');
   if ($('hudAlert').innerHTML !== html) $('hudAlert').innerHTML = html;
 
   const ph = s.dwell && s.dwell.photos && s.dwell.photos[0];      // foto real de Curiosity al llegar
   if (ph) {
     if ($('hudPhotoImg').dataset.f !== ph.file) { $('hudPhotoImg').src = 'data/' + ph.file; $('hudPhotoImg').dataset.f = ph.file; }
-    $('hudPhotoCap').textContent = `Vista real desde aquí · Curiosity, sol ${ph.sol} · ${ph.credit}`;
+    $('hudPhotoCap').textContent = t('hud.photoCap', { sol: ph.sol, credit: ph.credit });
   }
   $('hudPhoto').hidden = !ph;
   if (document.activeElement !== $('hScrub')) $('hScrub').value = (H.t / T) * 1000;
 
   drawCompass();
   const marks = A.stops.filter((k) => k.order && !A.returning).map((k) => ({ x: k.x, z: k.z, text: k.name, cls: '' }));
-  marks.push({ x: A.habitat.x, z: A.habitat.z, text: 'HÁBITAT', cls: 'hab' });
+  marks.push({ x: A.habitat.x, z: A.habitat.z, text: t('hud.habitat'), cls: 'hab' });
   placeLabels(marks.map((m) => ({ ...m, y: A.terrain.heightAt(m.x, m.z) + 4,
     html: `${m.text}<br>${Math.hypot(m.x - p.x, m.z - p.z).toFixed(0)} m`, cls: 'ar ' + m.cls })));
+}
+
+// Muestra la indicacion corta de TARS (solo texto: la voz es del dialogo simulado)
+function tarsGuide(g) {
+  if (g.key === H.tipKey) return;
+  H.tipKey = g.key; $('hTarsTip').textContent = '▸ ' + g.text;
 }
 
 function drawCompass() {
   const c = $('compass'), g = c.getContext('2d'), W = c.width, Hh = c.height;
   const deg = (((H.heading - H.lookYaw) * 180 / Math.PI) % 360 + 360) % 360;
   g.clearRect(0, 0, W, Hh); g.strokeStyle = g.fillStyle = '#4fd8ff'; g.textAlign = 'center'; g.font = 'bold 13px ui-monospace, monospace';
-  const names = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SO', 270: 'O', 315: 'NO' };
+  const names = { 0: t('dir.N'), 45: t('dir.NE'), 90: t('dir.E'), 135: t('dir.SE'), 180: t('dir.S'), 225: t('dir.SW'), 270: t('dir.W'), 315: t('dir.NW') };
   for (let d = -60; d <= 60; d++) {
     const a = Math.round(deg) + d, x = W / 2 + (a - deg) * (W / 120), m = ((a % 360) + 360) % 360;
     if (m % 5) continue;
@@ -876,7 +964,7 @@ function updatePlan() {
   A.ev1.visible = true; A.ev1.userData.animate(0); A.ev2.userData.animate(0);
   const items = A.stops.filter((s) => s.on).map((s) => ({ id: s.id, x: s.x, z: s.z, y: A.terrain.heightAt(s.x, s.z) + 5,
     html: `<b>${s.order || '–'}</b>${s.name}`, cls: 'lbl' + (s.order ? '' : ' off') + (s === A.selected ? ' sel' : '') }));
-  items.push({ x: A.habitat.x, z: A.habitat.z, y: A.terrain.heightAt(A.habitat.x, A.habitat.z) + 14, html: 'HÁBITAT', cls: 'lbl hab' });
+  items.push({ x: A.habitat.x, z: A.habitat.z, y: A.terrain.heightAt(A.habitat.x, A.habitat.z) + 14, html: t('hud.habitat'), cls: 'lbl hab' });
   const c = A.curiosity.position;
   items.push({ x: c.x, z: c.z, y: c.y + 5, html: `Curiosity · sol ${A.curiositySol}`, cls: 'lbl rov' });
   placeLabels(items);
@@ -885,7 +973,8 @@ function updatePlan() {
 let lastT = performance.now();
 function frame(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
-  if (document.body.dataset.mode === 'hud') updateHud(dt); else updatePlan();
+  const mode = document.body.dataset.mode;
+  if (mode === 'hud') updateHud(dt); else if (mode === 'intro') A.intro.update(dt); else updatePlan();
   A.renderer.render(A.scene, A.camera);
 }
 

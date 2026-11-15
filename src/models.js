@@ -100,3 +100,27 @@ export function makeBeacon(color = 0x39d0ff) {
   ring.rotation.x = -Math.PI / 2;
   return g;
 }
+
+// Nave de descenso para la introduccion: capsula conica con cuatro patas y motor
+export function makeLander() {
+  const g = new THREE.Group();
+  part(new THREE.CylinderGeometry(1.6, 3.2, 4.2, 24), WHITE, 0, 4.5, 0, g);                 // cuerpo conico
+  part(new THREE.SphereGeometry(1.6, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), WHITE, 0, 6.6, 0, g);   // morro
+  part(new THREE.CylinderGeometry(3.25, 3.25, 0.4, 24), ORANGE, 0, 2.5, 0, g);              // anillo
+  part(new THREE.CylinderGeometry(3.0, 2.2, 0.8, 24), DARK, 0, 1.9, 0, g);                  // base
+  part(new THREE.CylinderGeometry(0.7, 1.1, 1.0, 16), GREY, 0, 1.0, 0, g);                  // tobera
+  part(new THREE.CircleGeometry(0.5, 16), DARK, 0, 4.8, -2.35, g).rotation.set(-0.36, Math.PI, 0);    // escotilla
+  for (let i = 0; i < 4; i++) {            // patas inclinadas hacia fuera, con su plato de apoyo
+    const a = Math.PI / 4 + (i * Math.PI) / 2, c = Math.cos(a), s = Math.sin(a);
+    const leg = part(new THREE.CylinderGeometry(0.12, 0.12, 3.2, 8), GREY, c * 3.1, 1.5, s * 3.1, g);
+    leg.rotation.set(-0.5 * s, 0, 0.5 * c);
+    part(new THREE.CylinderGeometry(0.5, 0.5, 0.12, 12), GREY, c * 3.9, 0.06, s * 3.9, g);
+  }
+  // llama del motor (apunta hacia abajo); la introduccion la hace parpadear
+  const flame = new THREE.Group(); flame.position.y = 0.5; g.add(flame);
+  const fm = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+  part(new THREE.ConeGeometry(1.0, 7, 16), fm(0xff8a3d, 0.75), 0, -3.5, 0, flame).rotation.x = Math.PI;
+  part(new THREE.ConeGeometry(0.5, 4, 12), fm(0xfff2c0, 0.9), 0, -2.0, 0, flame).rotation.x = Math.PI;
+  g.userData.flame = flame;
+  return g;
+}
