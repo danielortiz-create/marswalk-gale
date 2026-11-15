@@ -5,6 +5,28 @@ An integrated, layered 3D map to plan and carry out an astronaut walk (a "Marswa
 **Live demo:** https://danielortiz-create.github.io/marswalk-gale/?lang=en
 (The app opens in Spanish by default; `?lang=en`, or the ES | EN button in the header, switches the whole app to English.)
 
+## Objective
+
+Give an astronaut on Mars two things that do not exist together today:
+
+1. **An integrated map** of the exact place where they will walk, used in the habitat to plan and in the helmet visor to carry out the walk.
+2. **TARS**, a proposed AI agent that runs locally on the suit, guides the astronaut, watches their health and oxygen, and helps them decide when to turn back, without waiting for Earth. In this demo TARS is simulated.
+
+Science question of the walk: *did groundwater flow through these fractures late in Mars' history?*
+
+📄 **Full document:** [Project objective and scope](docs/project-objective.md) (the problem, the two parts of the objective, the science, what is real and what is concept, and what is in and out of scope).
+
+**NASA data at a glance**
+
+| Source | Kind | What we used |
+|---|---|---|
+| **MRO** (Mars Reconnaissance Orbiter), HiRISE camera | Satellite in orbit | 1,048,576 elevation points and a 16.8-million-pixel image |
+| **Mars Odyssey**, THEMIS camera | Satellite in orbit | Day and night thermal mosaics |
+| **Curiosity** rover: REMS, RAD, Navcam, traverse | Rover on the surface | 90 sols of weather, its radiation dose, 10 photos and 150 positions |
+| **DONKI** (NASA space weather database) | Database | 33 space weather notifications |
+
+In total: **2 satellites, 1 rover and 1 NASA database**, 8 datasets and about 22 MB of real data. Full details in [NASA data used](#nasa-data-used).
+
 ## How it answers the NASA challenge
 
 | The challenge asks for | What Marswalk Gale does | Real data or simulated? |
@@ -136,6 +158,7 @@ python3 data-pipeline/build_layers.py
 ## Project structure
 
 ```
+docs/               project objective and scope (for the judges)
 data-pipeline/      Python scripts that prepare the data
 public/data/        data ready for the app
 src/terrain.js      3D mesh and layer shader
