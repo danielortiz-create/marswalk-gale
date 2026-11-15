@@ -13,6 +13,9 @@ const UMBRALES = [99, 95, 80, 70, 60];    // % de oxigeno (de la demo) en los qu
 const PAUSA = 0.5;                        // segundos de silencio entre frases
 const ENTRE_PENDIENTES = 120;             // segundos simulados minimos entre dos avisos de pendiente
 
+// minutos dichos en voz alta: «12 minutes» o «6 hours and 54 minutes»
+const minEn = (n) => (n < 60 ? `${n} minutes` : `${Math.floor(n / 60)} hours and ${n % 60} minutes`);
+
 // Frases de cada momento. d = datos del momento (ver main.js, updateHud)
 const GUION = {
   99: () => [['TARS', "EV1, this is TARS, your suit assistant. All readings today are simulated. I'm tracking your oxygen, your vitals and the terrain ahead."]],
@@ -41,6 +44,19 @@ const GUION = {
   parada: (d) => [
     ['TARS', `You've reached ${d.stop}. Take your samples; I'll keep watching your vitals.`],
     ['EV1', 'Starting samples now.'],
+  ],
+  // Decision ante la alerta solar simulada (ver main.js, openDecision)
+  alerta: (d) => [
+    ['TARS', `Solar alert, EV1. Radiation is rising. Going back now takes ${d.back} minutes and leaves ${minEn(d.margin)} of oxygen margin.`],
+    ['TARS', `Reaching ${d.stop} first adds ${d.extra} minutes. I recommend returning. Your call.`],
+  ],
+  regreso: (d) => [
+    ['EV1', 'Returning to the habitat.'],
+    ['TARS', `Copy. Follow the return line. The ${d.stop} observation stays pending.`],
+  ],
+  sigue: (d) => [
+    ['EV1', `I'll take the sample at ${d.stop} and come straight back.`],
+    ['TARS', "Copy. Keep it short. I'll watch your dose and your margin."],
   ],
   fin: () => [
     ['TARS', 'Welcome back to the habitat. Walk complete, great job.'],
@@ -98,5 +114,11 @@ export function createDialog(voice, mostrar) {
     }
   }
 
-  return { reset, update, talking: () => Boolean(actual || cola.length) };
+  // Frases urgentes (alerta y decision): cortan lo que se estuviera diciendo y hablan ya
+  function urgente(tipo, d) {
+    cola = [...GUION[tipo](d)]; actual = null; espera = 0;
+    window.speechSynthesis?.cancel();
+  }
+
+  return { reset, update, urgente, talking: () => Boolean(actual || cola.length) };
 }

@@ -1,8 +1,41 @@
 # Marswalk Gale
 
-Mapa 3D integrado para planear y ejecutar una caminata (Marswalk) en las crestas *boxwork* de Monte Sharp, cráter Gale, Marte. Combina datos de tres misiones de NASA — **MRO**, **Mars Odyssey** y **Curiosity** — más el clima espacial de **DONKI**.
+An integrated, layered 3D map to plan and carry out an astronaut walk (a "Marswalk") across the *boxwork* ridges of Mount Sharp, Gale Crater, Mars. It combines data from three NASA missions — **MRO**, **Mars Odyssey** and **Curiosity** — plus space weather from **DONKI**, and pairs the map with **TARS**, a proposed on-suit AI agent that guides the astronaut and watches their health.
 
-## Cómo ejecutarlo
+**Live demo:** https://danielortiz-create.github.io/marswalk-gale/?lang=en
+(The app opens in Spanish by default; `?lang=en`, or the ES | EN button in the header, switches the whole app to English.)
+
+## How it answers the NASA challenge
+
+| The challenge asks for | What Marswalk Gale does | Real data or simulated? |
+|---|---|---|
+| A specific site and science objective | Boxwork ridges of Mount Sharp, which Curiosity explored in 2025. Walk question: *did groundwater flow through these fractures late in Mars' history?* Each stop gets an objective and a field task based on whether it sits on a ridge, in a hollow or between them. | Site and terrain: real. Ridge/hollow: derived from the elevation model. Objective and task: our proposal. |
+| At least three data types | Topographic (HiRISE DEM), optical (HiRISE orthophoto), thermal (THEMIS), atmospheric (REMS), radiation (RAD), space weather (DONKI), first-person images (Navcam) and Curiosity's traverse. | Real NASA data |
+| An integrated, layered view | One 3D scene with six switchable layers (optical, elevation, slope, thermal, roughness, walk-back time), contour lines and Curiosity's path, each with opacity and legend. | Real data; slope, roughness and walk-back time are derived |
+| Safety first: radiation and space weather | Radiation dose along the walk; a simulated solar alert that doubles the dose, pauses the walk and lets the astronaut choose between returning now or reaching the next stop, comparing time and margin. Choosing to return draws the way back. | Dose rate: real (RAD). Alert scenario: simulated. Times and margins: model. |
+| Mobility in a suit, carrying equipment | Walking speed and metabolic cost depend on slope; the route avoids slopes over 15°. GO / NO-GO verdict only if there is always enough oxygen to walk back. | Model (parameters in `src/nav.js`) |
+| A route that avoids obstacles | Automatic route (Dijkstra on a 4 m grid) that picks the best stop order and the safest path; stops can be added with a click. | Derived from real terrain |
+| Formats: habitat screen, tablet, helmet HUD | Planner for the habitat screen and a first-person helmet view (HUD) with compass, oxygen, return time, margin, health and a minimap. | — |
+| First-person images from surface missions | Real Curiosity Navcam photos at each stop: what the astronaut would see on arrival. | Real |
+| Rovers or working in pairs | A crewmate (EV2) walks ahead of you in the helmet view; Curiosity and its real traverse are on the map. | — |
+| Different from Mars Trek and USGS maps | Hyperlocal: a 2 × 2 km area with one million elevation points, built for a single walk, not a regional map. | Real |
+
+## TARS: a proposed local AI agent for the suit
+
+**The proposal.** TARS is an AI agent that would run **locally, on the suit's own computer**. It would not depend on Earth: a radio signal takes several minutes, and sometimes more than 20, to travel between Mars and Earth, too slow for decisions in the middle of a walk. On board, TARS would guide the astronaut along the route, watch their vital signs and oxygen, warn about slopes and hazards, and help decide when to turn back.
+
+**In this demo TARS is simulated.** There is no AI model, no internet connection and no API key: everything runs in the browser, including on GitHub Pages. What you see shows how the agent would behave:
+
+- **Simulated conversation in the helmet view (in English).** TARS talks with the astronaut (EV1), with two different voices and subtitles. It asks how they feel when their heart rate rises, warns about slopes of 10° or more in the next 40 m, says how far and how long is left to the habitat, and checks in at each stop. It speaks at 99 % oxygen and again at 95, 80, 70 and 60 %. While they talk, the walk slows to ×1. Script in `src/tars-dialog.js`.
+- **Decision under a solar alert.** About 120 m before the first stop (or with the *Simulate solar alert* button) the walk pauses and TARS compares *Return now* with *Continue to the stop*: minutes to the habitat and oxygen margin on arrival for each option. If you return, the visor draws the way back and that stop's observation stays pending.
+- **Return at a glance.** Next to the oxygen bar: *Return* time and *Margin on arrival*, in minutes (grams of O₂ appear on hover), plus a north-up minimap with your position, the habitat, the stops and the way back. Labels on the terrain show straight-line distance; the *Walking* row in the panel shows distance along the route.
+- **Demo oxygen.** In the helmet view, oxygen drops quickly (1 % every 2 s, pausing while they talk) so an audience can follow it. It is labelled **SIM**: it is not the model estimate, which stays in the planner.
+- **Astronaut health (simulated).** Heart rate, breathing, body temperature and effort. There are no real sensors: values come from a model driven by the effort of the route (`src/health.js`) and are labelled *Model*.
+- **Commands in the planner.** Quick buttons or keywords ("status", "reserve 30 %", "environment", "health", "solar event", "return"). TARS runs the command and answers with the app's data.
+
+**Voice input in the helmet view:** hold *Talk to TARS* or the `V` key, ask, and release. TARS answers on the visor and out loud. This works in Chrome and Edge; in other browsers, type the question. In Chrome, audio is sent to Google's servers for transcription.
+
+## Run it locally
 
 ```bash
 npm install
@@ -12,89 +45,77 @@ npm install
 npm run dev
 ```
 
-Abre la dirección que aparece (normalmente `http://localhost:5173`). En equipos sin tarjeta gráfica añade `?malla=2` al final de la dirección para usar una malla más ligera.
+Open the address shown (usually `http://localhost:5173`). On computers without a graphics card, add `?malla=2` to the address for a lighter mesh.
 
-Para generar el sitio estático publicable (carpeta `dist/`):
+To build the static site (`dist/` folder):
 
 ```bash
 npm run build
 ```
 
-## TARS, el agente de IA del traje
+## Features
 
-En la misión que imaginamos, TARS es un agente de IA local que corre en el propio traje: da indicaciones al astronauta mientras camina y vigila su salud, sin depender de la Tierra.
+**Intro**
+- The first time the app opens, a ship lands next to the habitat; the ship and an astronaut explain the project in a few lines, with subtitles and voice.
+- ES / EN button for the intro language (changes instantly) and *Skip intro* (or `Esc`). If you pick a different language here, the app reloads in that language at the end.
+- To watch it again, press "?" in the header or add `?intro=1` to the address; `?intro=0` skips it.
 
-En esta demostración **TARS es una simulación**: no hay IA, ni conexión, ni clave de API. Todo funciona dentro del navegador, también en GitHub Pages.
+**Language (ES | EN)**
+- The ES | EN button in the planner header switches the WHOLE app (interface, TARS, helmet guidance and science objectives) between Spanish and English. Spanish is the default; the choice is remembered in the browser. Switching reloads the page; `?lang=en` or `?lang=es` also forces it. Texts live in `src/i18n.js`.
 
-- **Diálogo simulado en la vista de casco (en inglés):** TARS habla con el astronauta (EV1), con dos voces distintas y subtítulos. Le pregunta cómo se siente cuando sube el pulso, le avisa de las pendientes de 10° o más en los próximos 40 m, le dice cuánto falta por recorrer y le acompaña en cada parada. Empieza al 99 % de oxígeno y vuelve a hablar al 95, 80, 70 y 60 %. Mientras hablan, la caminata baja a ×1. Guion en `src/tars-dialog.js`.
-- **Oxígeno de demostración:** en el casco el oxígeno baja deprisa (1 % cada 2 s, y se detiene mientras hablan) para que el público lo vea, y lleva la etiqueta «SIM». No es la estimación del modelo, que sigue en el planificador.
-- **Salud del astronauta (simulada):** pulso, respiración, temperatura corporal y esfuerzo. No hay sensores reales: son un modelo calculado a partir del esfuerzo de la ruta (`src/health.js`) y van etiquetados como «Modelo».
-- **Órdenes en el planificador:** botones rápidos o palabras clave («estado», «reserva 30 %», «entorno», «salud», «evento solar», «volver»). TARS ejecuta la orden y responde con los datos de la app.
+**Planner (inside the habitat)**
+- Real 3D terrain of 2 × 2 km (one million elevation points).
+- Six switchable layers with opacity and legend: optical, elevation, slope, thermal, roughness and walk-back time to the habitat; plus contour lines and Curiosity's real traverse.
+- Automatic route: picks the best stop order and the safest path, avoiding steep slopes. Add your own stops with a click on the terrain.
+- The layer card, the right panel and the route profile fold away with their arrow to leave more room for the terrain.
+- Summary strip above the map: active stops, distance, duration, walk back and oxygen on arrival.
+- Minimum oxygen reserve: if the plan does not meet it, stops are dropped until it does.
+- Solar event scenario from any stop, with the way back as a dashed line.
+- Walk budget: distance, duration, climb, energy, oxygen, radiation dose and a GO / NO-GO verdict based on whether there is always enough oxygen to walk back.
+- Real Curiosity photos at each stop.
+- Exports the terrain, route and habitat to a GLB file (for Blender or 3D printing).
 
-**Voz en la vista de casco:** mantén pulsado «Hablar con TARS» o la tecla `V`, pregunta, y suelta. TARS responde en el visor y en voz alta. Funciona en Chrome y Edge; en otros navegadores se escribe la pregunta. En Chrome, el audio se envía a los servidores de Google para transcribirlo.
+**Science at each stop**
+- Walk question: did groundwater flow through these fractures late in Mars' history?
+- The app uses the terrain to work out whether each stop sits on a ridge, in a hollow or in between (label *Derived*).
+- From that it proposes an objective and a task (label *Proposal*): a proposal by our team, not Curiosity results. They appear on the stop card and in TARS's guidance on the visor when you arrive, and they also work for stops added by hand. Texts in `src/science.js`.
 
-## Qué hace
+**Helmet view (HUD)**
+- Walk the route in first person with compass, oxygen, return time, margin on arrival, local solar time, dose, slope, health and distance to the next stop.
+- Floating markers over the stops and the habitat; a crewmate walks ahead.
+- Starts at ×10 speed; ×1, ×30 and ×120 are also available.
 
-**Introducción**
-- La primera vez que se abre la app, una nave aterriza junto al hábitat; la nave y un astronauta explican el proyecto en unas pocas frases, con subtítulos y voz.
-- Botón ES / EN para el idioma de la introducción (cambia al instante) y botón «Saltar introducción» (o tecla `Esc`). Si eliges otro idioma aquí, al terminar la app se recarga en ese idioma.
-- Para volver a verla, pulsa «?» en la cabecera o añade `?intro=1` a la dirección; `?intro=0` la omite.
+## NASA data used
 
-**Idioma (ES | EN)**
-- Un botón ES | EN en la cabecera del planificador cambia TODA la app (interfaz, TARS por texto y voz, indicaciones del casco y objetivos científicos) entre español e inglés. El español es el idioma por defecto; la elección se recuerda en el navegador. Cambiar de idioma recarga la página; también se puede forzar con `?lang=en` o `?lang=es` en la dirección. Los textos están en `src/i18n.js`.
-
-**Planificador (dentro del hábitat)**
-- Terreno 3D real de 2 × 2 km (un millón de puntos de elevación).
-- Seis capas activables con opacidad y leyenda: óptica, elevación, pendiente, térmica, rugosidad y tiempo de regreso a pie al hábitat; más curvas de nivel y el recorrido real de Curiosity.
-- Ruta automática: elige el mejor orden de paradas y el camino más seguro, evitando pendientes. Puedes añadir paradas propias con un clic en el terreno.
-- Las tarjetas de capas, el panel derecho y el perfil de la ruta se pliegan con su flecha para dejar más sitio al terreno.
-- Franja de resumen sobre el mapa: paradas activas, distancia, duración, regreso y oxígeno al llegar.
-- Reserva mínima de oxígeno: si el plan no la cumple, omite paradas hasta cumplirla.
-- Escenario de evento solar desde cualquier parada, con la ruta de regreso en línea discontinua.
-- Presupuesto de la caminata: distancia, duración, desnivel, energía, oxígeno, dosis de radiación y un veredicto GO / NO-GO según si siempre queda oxígeno para volver a pie.
-- Fotos reales de Curiosity en cada parada: lo que el astronauta verá al llegar.
-- Exporta el terreno, la ruta y el hábitat a un archivo GLB (para Blender o impresión 3D).
-
-**Ciencia en cada parada**
-- Pregunta de la caminata: ¿circuló agua subterránea por estas fracturas tarde en la historia de Marte?
-- La app calcula con el terreno si cada parada está sobre una cresta, en un hueco o entre ambos (etiqueta «Derivado»).
-- Según eso propone un objetivo y una tarea (etiqueta «Propuesta»): son una propuesta del equipo, no resultados de Curiosity. Se ven en la tarjeta de la parada, TARS los dice al llegar y sirven también para las paradas añadidas a mano. Textos en `src/science.js`.
-
-**Vista de casco (HUD)**
-- Recorres la ruta en primera persona con brújula, oxígeno, margen de regreso, hora solar local, dosis, pendiente y distancia a la siguiente parada.
-- Marcadores flotantes sobre las paradas y el hábitat; un compañero camina delante.
-- "Simular alerta solar": duplica la dosis y recalcula al instante la ruta más rápida al hábitat.
-
-## Datos de NASA usados
-
-| Tipo | Dato | Misión / fuente |
+| Type | Data | Mission / source |
 |---|---|---|
-| Topográfico | MSL Gale Merged DEM, 1 m/píxel, v3 | MRO HiRISE · USGS Astrogeology |
-| Óptico | MSL Gale Orthophoto Mosaic, 25 cm/píxel, v3 | MRO HiRISE · USGS Astrogeology |
-| Térmico | THEMIS IR Controlled Mosaics día y noche, 100 m/píxel | Mars Odyssey · NASA Mars Trek |
-| Atmosférico | Temperatura, presión, UV y opacidad por sol | Curiosity REMS (NASA/JPL-Caltech/CAB) |
-| Radiación | Dosis en superficie 0.64 ± 0.12 mSv/día | Curiosity RAD · Hassler et al. 2014, *Science* |
-| Clima espacial | Notificaciones de CME, fulguraciones y tormentas | NASA CCMC DONKI |
-| Imágenes | Fotos crudas Navcam por sol | Curiosity · mars.nasa.gov |
-| Recorrido | Posiciones del rover por sol | Curiosity · MMGIS waypoints |
+| Topographic | MSL Gale Merged DEM, 1 m/pixel, v3 | MRO HiRISE · USGS Astrogeology |
+| Optical | MSL Gale Orthophoto Mosaic, 25 cm/pixel, v3 | MRO HiRISE · USGS Astrogeology |
+| Thermal | THEMIS IR Controlled Mosaics, day and night, 100 m/pixel | Mars Odyssey · NASA Mars Trek |
+| Atmospheric | Temperature, pressure, UV and opacity per sol | Curiosity REMS (NASA/JPL-Caltech/CAB) |
+| Radiation | Surface dose 0.64 ± 0.12 mSv/day | Curiosity RAD · Hassler et al. 2014, *Science* |
+| Space weather | CME, flare and storm notifications | NASA CCMC DONKI |
+| Images | Raw Navcam photos per sol | Curiosity · mars.nasa.gov |
+| Traverse | Rover positions per sol | Curiosity · MMGIS waypoints |
 
-## Qué es dato y qué es modelo
+## What is data and what is model
 
-La app marca cada elemento con una etiqueta: «Observación» (medido por un instrumento), «Derivado» (calculado directamente de una medición) o «Modelo» (estimación).
+Every element in the app carries a label: *Observation* (measured by an instrument), *Derived* (computed directly from a measurement), *Model* (an estimate) or *Proposal* (our team's suggestion).
 
-- **Dato:** elevación, ortofoto, brillo térmico, clima, dosis de radiación, avisos DONKI, fotos y recorrido. La pendiente y la rugosidad se calculan directamente del DEM.
-- **Modelo:** constantes vitales del astronauta (simuladas), velocidad de marcha, gasto metabólico, consumo de oxígeno, tiempo de regreso y veredicto GO / NO-GO. Los parámetros están en `src/nav.js` (objeto `P`) y se pueden cambiar. La temperatura mostrada en el casco es una interpolación entre el mínimo y el máximo de REMS. El color del terreno es aproximado (la ortofoto es en escala de grises).
-- **Modelos 3D** de hábitat, rover, astronautas y Curiosity: conceptuales, hechos con formas básicas.
+- **Data:** elevation, orthophoto, thermal brightness, weather, radiation dose, DONKI notices, photos and traverse. Slope and roughness are computed directly from the DEM.
+- **Model:** the astronaut's vital signs (simulated), walking speed, metabolic cost, oxygen use, return time and the GO / NO-GO verdict. Parameters are in `src/nav.js` (object `P`) and can be changed. The temperature in the helmet view is interpolated between the REMS minimum and maximum. Terrain colour is approximate (the orthophoto is greyscale).
+- **Simulated:** TARS (no AI model runs in this demo), its conversation with the astronaut, the solar alert and the demo oxygen in the helmet view.
+- **3D models** of the habitat, rover, astronauts, lander and Curiosity: conceptual, built from basic shapes.
 
-## Limitaciones conocidas
+## Known limitations
 
-- No hay capa espectral (CRISM): no se consiguió una fuente a esta escala. En su lugar hay rugosidad y tiempo de regreso.
-- La capa térmica es real pero gruesa: 25 × 25 píxeles en toda el área.
-- La radiación usa el valor publicado de RAD, no el archivo PDS reprocesado.
-- DONKI observa desde el entorno de la Tierra; no es un pronóstico para Marte.
-- La rejilla de navegación es de 4 m: no ve rocas individuales menores que eso.
+- No spectral layer (CRISM): we could not find a source at this scale. Roughness and walk-back time are included instead.
+- The thermal layer is real but coarse: 25 × 25 pixels over the whole area.
+- Radiation uses the published RAD value, not the reprocessed PDS file.
+- DONKI observes from near Earth; it is not a forecast for Mars.
+- The navigation grid is 4 m: it does not see individual rocks smaller than that.
 
-## Rehacer los datos
+## Rebuild the data
 
 ```bash
 pip install rasterio scipy pillow numpy
@@ -108,34 +129,36 @@ python3 data-pipeline/fetch_data.py
 python3 data-pipeline/build_layers.py
 ```
 
-`fetch_data.py` descarga solo la ventana necesaria de los mosaicos (que pesan decenas de GB). Para otra zona de Gale, cambia `BOXWORK_SOLS` o el centro en ese archivo.
+`fetch_data.py` downloads only the window it needs from the mosaics (which are tens of GB). For another area of Gale, change `BOXWORK_SOLS` or the centre in that file.
 
-## Estructura
+## Project structure
 
 ```
-data-pipeline/   scripts de Python que preparan los datos
-public/data/     datos listos para la app
-src/terrain.js   malla 3D y shader de capas
-src/nav.js       rutas (Dijkstra) y presupuesto de la caminata
-src/models.js    modelos 3D
-src/main.js      interfaz: planificador, herramientas de TARS y vista de casco
-src/tars.js      TARS simulado: respuestas locales y voz
-src/tars-dialog.js  diálogo simulado TARS ↔ astronauta en el casco (en inglés)
-src/health.js    salud simulada del astronauta e indicaciones automáticas de TARS
-src/science.js   objetivo científico de cada parada
-src/intro.js     introducción animada (aterrizaje, nave y astronauta)
-src/intro-text.js  textos de la introducción en español e inglés
-src/i18n.js      idioma de la app (ES | EN) y diccionario de todos los textos
-tests/smoke.cjs  prueba automática en navegador
-video/           scripts que generan el vídeo de presentación
+data-pipeline/      Python scripts that prepare the data
+public/data/        data ready for the app
+src/terrain.js      3D mesh and layer shader
+src/nav.js          routes (Dijkstra) and walk budget
+src/models.js       3D models
+src/main.js         interface: planner, TARS commands and helmet view
+src/tars.js         simulated TARS: local replies and voice
+src/tars-dialog.js  simulated TARS ↔ astronaut conversation in the helmet view
+src/health.js       simulated astronaut health and TARS guidance
+src/science.js      science objective for each stop
+src/intro.js        animated intro (landing, ship and astronaut)
+src/intro-text.js   intro texts in Spanish and English
+src/i18n.js         app language (ES | EN) and the dictionary of all texts
+tests/smoke.cjs     automated browser test
+video/              scripts that build the presentation video
 ```
 
-## Guion de 3 minutos para el jurado
+Code comments are in Spanish.
 
-1. **El problema (20 s).** "Los mapas de Marte que existen son globales. Un astronauta que sale a caminar necesita uno de su kilómetro cuadrado, con todo junto."
-2. **El lugar (20 s).** "Elegimos las crestas boxwork de Monte Sharp, que Curiosity exploró en 2025. Pueden decirnos si hubo agua subterránea tarde en la historia de Marte." Gira el terreno 3D; señala la línea blanca: el recorrido real de Curiosity.
-3. **Las capas (40 s).** Activa pendiente, luego térmica, luego regreso a pie. "Tres misiones en una sola vista: MRO, Odyssey y Curiosity."
-4. **La ruta (40 s).** "El sistema elige el orden de las paradas y el camino más seguro." Muestra que la ruta rodea las zonas rojas. Baja la pendiente máxima y enseña cómo cambia. Añade una parada con un clic.
-5. **La seguridad (30 s).** Señala el veredicto GO, el oxígeno y la dosis. "En todo momento sabemos si queda oxígeno para volver a pie."
-6. **El casco (30 s).** Inicia la caminata. Al llegar a una parada aparece la foto real de Curiosity. Pulsa "Simular alerta solar": la ruta cambia hacia el hábitat.
-7. **Cierre (10 s).** "Datos reales, etiquetados; modelos transparentes; y funciona para cualquier zona del cráter cambiando una línea."
+## 3-minute walkthrough for the judges
+
+1. **The problem (20 s).** "Existing Mars maps are global. An astronaut heading out on foot needs a map of their own square kilometre, with everything in one place."
+2. **The site (20 s).** "We chose the boxwork ridges of Mount Sharp, which Curiosity explored in 2025. They can tell us whether groundwater flowed late in Mars' history." Rotate the 3D terrain; point at the white line: Curiosity's real traverse.
+3. **The layers (40 s).** Turn on slope, then thermal, then walk-back time. "Three missions in a single view: MRO, Odyssey and Curiosity."
+4. **The route (30 s).** "The system picks the order of the stops and the safest path." Show that the route goes around the red areas. Add a stop with a click.
+5. **Safety (20 s).** Point at the GO verdict, the oxygen and the dose. "At every moment we know whether there is enough oxygen to walk back."
+6. **The helmet and TARS (40 s).** Start the walk. TARS, the proposed on-suit AI agent, checks on the astronaut's vitals. Near Boxwork 5 the solar alert goes off: TARS compares returning with continuing, you choose *Return*, and the visor draws the way back.
+7. **Close (10 s).** "Real data, clearly labelled; transparent models; and an on-suit agent that keeps the astronaut safe without waiting for Earth."

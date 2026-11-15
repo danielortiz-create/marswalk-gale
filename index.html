@@ -137,7 +137,8 @@
     <div id="hudAlert"></div>
     <div class="hbox hl">
       <div class="hrow"><span>O₂</span><div class="bar"><i id="hO2bar"></i></div><b id="hO2"></b></div>
-      <div class="hrow"><span data-i18n="hud.margin">MARGEN REGRESO</span><b id="hMargin"></b></div>
+      <div class="hrow"><span data-i18n="hud.ret">REGRESO</span><b id="hRet"></b></div>
+      <div class="hrow"><span data-i18n="hud.margin">MARGEN AL LLEGAR</span><b id="hMargin"></b></div>
       <div class="hrow"><span data-i18n="hud.eva">TIEMPO EVA</span><b id="hTime"></b></div>
       <div class="hrow"><span data-i18n="hud.clock">HORA LOCAL</span><b id="hClock"></b></div>
       <div class="hrow"><span data-i18n="hud.dose">DOSIS</span><b id="hDose"></b></div>
@@ -152,11 +153,20 @@
     </div>
     <div class="hbox hr">
       <div class="hrow"><span data-i18n="hud.next">SIGUIENTE</span><b id="hNext"></b></div>
-      <div class="hrow"><span data-i18n="hud.dist">DISTANCIA</span><b id="hNextD"></b></div>
+      <div class="hrow"><span data-i18n="hud.dist">A PIE</span><b id="hNextD"></b></div>
       <div class="hrow"><span data-i18n="hud.slope">PENDIENTE</span><b id="hSlope"></b></div>
       <div class="hrow"><span data-i18n="hud.elev">ELEVACIÓN</span><b id="hElev"></b></div>
       <div class="hrow"><span data-i18n="hud.walked">RECORRIDO</span><b id="hDist"></b></div>
-      <div class="hrow"><span data-i18n="hud.back">REGRESO A PIE</span><b id="hBack"></b></div>
+    </div>
+    <!-- minimapa: posicion, habitat, ruta y regreso (norte arriba) -->
+    <div id="hMapBox" class="hbox hr"><div class="htitle" data-i18n="hud.map">MAPA</div><canvas id="hMap"></canvas></div>
+    <!-- decision del astronauta ante la alerta solar (simulada) -->
+    <div id="hDecide" hidden>
+      <div class="dtitle" data-i18n="dec.title">☀ ALERTA SOLAR SIMULADA · DECIDE</div>
+      <div class="dopt"><b id="dBackT"></b><span id="dBackD"></span></div>
+      <div class="dopt"><b id="dContT"></b><span id="dContD"></span></div>
+      <div class="dnote" data-i18n="dec.note">Tiempos y márgenes: estimaciones del modelo.</div>
+      <div class="dbtns"><button id="dBack" class="primary" data-i18n="dec.btnBack">Regresar al hábitat</button><button id="dCont"></button></div>
     </div>
     <!-- Dialogo simulado TARS <-> astronauta (subtitulo; textos en src/tars-dialog.js) -->
     <div id="hSub" hidden><b id="hSubWho"></b><span id="hSubText"></span></div>

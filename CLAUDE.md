@@ -25,7 +25,7 @@ App web 3D (Vite + Three.js, JavaScript sin frameworks) para planear una caminat
 
 ## Reglas
 
-- Interfaz en español por defecto y en inglés con el botón ES | EN; comentarios del código en español.
+- Interfaz en español por defecto y en inglés con el botón ES | EN; comentarios del código en español. El `README.md` va en INGLÉS (lo leen los jueces de NASA) y empieza con la tabla «How it answers the NASA challenge».
 - Todo texto visible nuevo va en el diccionario de `src/i18n.js` en los DOS idiomas (las claves de `es` y `en` deben coincidir); en el HTML se marca con `data-i18n`. Los nombres de herramientas de TARS y las claves JSON de sus resultados siguen en español (son internos).
 - Nunca presentar una estimación como medición: etiquetas «Observación», «Derivado» o «Modelo». Los objetivos científicos de las paradas llevan «Propuesta».
 - TARS es una SIMULACIÓN: no hay IA ni API (se quitó a propósito porque el proyecto es público en GitHub). Una orden nueva se implementa en `runTool` de `src/main.js`, se reconoce en `offlineIntent` y se responde en `localReply` de `src/tars.js`.
@@ -36,7 +36,7 @@ App web 3D (Vite + Three.js, JavaScript sin frameworks) para planear una caminat
 ## Estado actual
 
 - Concepto: TARS es el agente de IA local del traje (da indicaciones y vigila la salud). En la demo todo es simulado: diálogo guionizado en inglés en el casco, oxígeno de demostración (etiqueta «SIM», baja 1 % cada 2 s), salud modelada y respuestas locales en el planificador.
-- Hecho: diálogo simulado TARS ↔ astronauta, salud simulada, app completa en español e inglés (botón ES | EN en la cabecera), introducción animada con botón ES/EN, tarjetas plegables, datos reales, planificador 3D, vista de casco (arranca a ×10, ×1 mientras hablan), página en GitHub Pages, vídeo de presentación (`video/`, ver `build.sh`).
+- Hecho: decisión ante alerta solar en el casco (`openDecision`/`decide` en `main.js`, salta a 120 m de la primera parada), regreso y margen en minutos, minimapa (`drawMinimap`), diálogo simulado TARS ↔ astronauta, salud simulada, app completa en español e inglés (botón ES | EN en la cabecera), introducción animada con botón ES/EN, tarjetas plegables, datos reales, planificador 3D, vista de casco (arranca a ×10, ×1 mientras hablan), página en GitHub Pages, vídeo de presentación (`video/`, ver `build.sh`).
 - Sin probar: las voces (el navegador integrado no tiene) y el micrófono.
 - Pendiente: voz del vídeo. Guion en `video/narration.json`; `video/voice.py` usa el motor Kokoro (hay que descargar los archivos de voz en `video/voices/`, ver el encabezado del script).
 - Ideas sin decidir: lectura bajo el cursor, versión tablet, paleta para daltonismo.

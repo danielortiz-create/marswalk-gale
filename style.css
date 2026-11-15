@@ -229,11 +229,20 @@ details#more summary { cursor: pointer; color: var(--accent); padding: 6px 0; }
 #introSub b { font-size: 11px; letter-spacing: .14em; color: var(--cyan); white-space: nowrap; }
 #introSub span { flex: 1; font-size: clamp(15px, 2vw, 20px); line-height: 1.35; }
 /* subtitulo del dialogo simulado en la vista de casco */
-#hSub { position: absolute; left: 50%; top: 56%; transform: translateX(-50%); width: min(620px, 44vw); display: flex; gap: 12px; align-items: baseline;
+#hSub { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); width: clamp(260px, calc(92vw - 720px), 540px); display: flex; gap: 12px; align-items: baseline;
   padding: 10px 14px; background: rgba(4,14,20,.8); border: 1px solid rgba(79,216,255,.35); border-radius: 10px; font-family: system-ui, sans-serif; }
 #hSub b { font-size: 11px; letter-spacing: .14em; color: var(--cyan); white-space: nowrap; }
 #hSub b.ev1 { color: #ff8a3d; }
 #hSub span { flex: 1; font-size: clamp(14px, 1.6vw, 18px); line-height: 1.35; color: #fff; }
+#hMapBox { top: 296px; padding: 8px 10px; }
+#hMap { display: block; width: 100%; height: 150px; margin-top: 4px; }
+#hDecide { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); width: min(520px, 90vw); padding: 14px 16px;
+  background: rgba(20,10,4,.9); border: 1px solid var(--warn); border-radius: 10px; pointer-events: auto; font-family: system-ui, sans-serif; color: #fff; }
+#hDecide .dtitle { color: var(--warn); font-weight: 700; letter-spacing: .1em; font-size: 13px; margin-bottom: 8px; }
+#hDecide .dopt { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px dashed rgba(255,255,255,.15); font-size: 14px; }
+#hDecide .dopt span { color: #ffe3b8; text-align: right; }
+#hDecide .dnote { font-size: 11px; opacity: .7; margin: 8px 0 10px; }
+#hDecide .dbtns { display: flex; gap: 8px; } #hDecide .dbtns button { flex: 1; padding: 8px; }
 #hO2 small { font-size: 9px; color: var(--warn); margin-left: 3px; }
 #introFade { position: absolute; inset: 0; background: #07090c; opacity: 0; pointer-events: none !important; transition: opacity .45s; }
 #introFade.on { opacity: 1; }
