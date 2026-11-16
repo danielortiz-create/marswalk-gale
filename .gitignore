@@ -8,3 +8,7 @@ video/frames
 video/out
 video/voices
 __pycache__
+promo/clips
+promo/frames
+promo/out
+promo/frames30

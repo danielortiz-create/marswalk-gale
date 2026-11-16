@@ -131,6 +131,18 @@ Every element in the app carries a label: *Observation* (measured by an instrume
 - **Simulated:** TARS (no AI model runs in this demo), its conversation with the astronaut, the solar alert and the demo oxygen in the helmet view.
 - **3D models** of the habitat, rover, astronauts, lander and Curiosity: conceptual, built from basic shapes.
 
+## Use of AI (Super Intelligence, SI)
+
+Following the NASA Space Apps rules, this is where and how we used AI tools. We used one AI coding assistant: **Claude (Anthropic)**.
+
+- **Code (SI-assisted):** the web app (JavaScript, Three.js, Vite), the Python data pipeline (`data-pipeline/`), the tests (`tests/`) and the video scripts (`promo/`, `video/`) were written with the help of Claude. The team defined the idea, the design and the decisions, and reviewed and tested the results.
+- **Data (not AI-generated):** all scientific data is real NASA data (MRO HiRISE, Mars Odyssey THEMIS, Curiosity REMS, RAD, Navcam and traverse, DONKI). AI only helped write the scripts that download and process it. Values the app computes or estimates are labelled *Derived* or *Model*, as explained above.
+- **Video (SI-assisted, watermarked):** the demo video was produced by AI-assisted scripts that record the app and animate the graphics (`promo/`). It carries a visible **"AI-assisted (SI)"** watermark and an AI note in its file metadata.
+- **Audio (SI-generated):** the background music is synthesized by a script written with Claude (`promo/music.cjs`). No recorded or third-party music is used. This is noted in the video's metadata.
+- **Images:** no AI image generators were used. The 3D models are built in code from basic shapes, and the photos are real Curiosity Navcam images.
+- **TARS:** the on-suit agent in the demo is a scripted simulation; no AI model runs in the app.
+- **NASA branding:** no NASA logos, flags or design elements are used. NASA missions are named only to credit the data sources.
+
 ## Known limitations
 
 - No spectral layer (CRISM): we could not find a source at this scale. Roughness and walk-back time are included instead.

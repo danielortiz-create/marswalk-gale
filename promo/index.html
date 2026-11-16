@@ -1,0 +1,545 @@
+<!doctype html>
+<!-- index.html — composicion del video promocional (60 s, 1920x1080).
+     Todo depende del tiempo: seek(t) coloca cada elemento para el segundo t.
+     render.cjs llama a seek() fotograma a fotograma y guarda cada imagen. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marswalk Gale promo</title>
+<style>
+  :root { --or: #ff8a3d; --cy: #4fd8ff; --bg: #07080c; --tx: #f3efe8; --dim: #9aa0ab; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--tx);
+    font-family: Bahnschrift, 'Segoe UI', system-ui, sans-serif; }
+  .abs { position: absolute; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  canvas { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+  .kicker { font-size: 26px; letter-spacing: .32em; color: var(--or); font-weight: 600; }
+  .big { font-size: 96px; font-weight: 700; line-height: 1.02; letter-spacing: -.01em; }
+  .mid { font-size: 64px; font-weight: 700; line-height: 1.05; }
+  .cy { color: var(--cy); } .or { color: var(--or); }
+
+  /* escena 1: titulo */
+  #title { left: 0; right: 0; top: 790px; text-align: center; font-size: 132px; font-weight: 700; letter-spacing: .14em; }
+  #title span { display: inline-block; }
+  #tag1 { left: 0; right: 0; top: 960px; text-align: center; font-size: 38px; color: var(--dim); letter-spacing: .04em; }
+  #kick1 { left: 0; right: 0; top: 70px; text-align: center; }
+
+  /* escena 2: del planeta al terreno */
+  #ortho { left: 0; top: -420px; width: 1920px; height: 1920px; background: url(../public/data/ortho.jpg) center/cover;
+    filter: sepia(1) saturate(2.1) hue-rotate(-12deg) brightness(.92) contrast(1.15); }
+  #shade2 { inset: 0; background: linear-gradient(90deg, rgba(7,8,12,.92) 0%, rgba(7,8,12,.55) 42%, rgba(7,8,12,0) 70%); }
+  #lines2 { left: 110px; top: 330px; }
+  #lines2 div { margin-bottom: 18px; }
+  #ret { left: 1120px; top: 300px; width: 480px; height: 480px; border: 3px solid var(--cy); }
+  #ret::before, #ret::after { content: ''; position: absolute; background: var(--cy); }
+  #retLbl { left: 1120px; top: 796px; font-size: 26px; letter-spacing: .12em; color: var(--cy); }
+
+  /* escena 3: satelites y datos */
+  #orbits { left: 0; top: 0; }
+  .satLbl { font-size: 22px; letter-spacing: .16em; font-weight: 600; fill: var(--tx); }
+  #head3 { left: 880px; top: 70px; }
+  #chips { left: 880px; top: 130px; display: flex; gap: 18px; }
+  .chip { padding: 12px 26px; border: 2px solid rgba(255,255,255,.25); border-radius: 40px; font-size: 32px; font-weight: 700; }
+  .chip b { color: var(--or); font-size: 40px; margin-right: 10px; }
+  .card { left: 880px; top: 270px; width: 960px; border-radius: 22px; padding: 44px 50px;
+    background: linear-gradient(160deg, rgba(30,34,44,.95), rgba(14,16,22,.95)); border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 30px 80px rgba(0,0,0,.5); opacity: 0; }
+  .card .who { font-size: 24px; letter-spacing: .26em; color: var(--dim); }
+  .card h2 { font-size: 64px; margin: 6px 0 26px; }
+  .card .row { display: flex; gap: 40px; }
+  .card .stat { margin-bottom: 26px; }
+  .card .num { font-size: 84px; font-weight: 700; color: var(--cy); line-height: 1; font-variant-numeric: tabular-nums; }
+  .card .lab { font-size: 28px; color: var(--tx); margin-top: 6px; }
+  .card .lab small { display: block; color: var(--dim); font-size: 22px; margin-top: 2px; }
+  .card .thumb { width: 340px; height: 340px; border-radius: 14px; object-fit: cover; flex: none; border: 1px solid rgba(255,255,255,.15); }
+  .card .tagObs { display: inline-block; font-size: 20px; padding: 4px 12px; border-radius: 6px; background: #1d4d33; color: #8ff0b6; margin-top: 8px; letter-spacing: .08em; }
+  #sum { left: 880px; top: 270px; width: 960px; height: 640px; display: flex; flex-direction: column; justify-content: center; opacity: 0; }
+  #sum .big { font-size: 110px; }
+
+  /* escenas con la app */
+  #cap { left: 110px; top: 54px; right: 110px; }
+  #cap .mid { font-size: 66px; }
+  #cap .sub { font-size: 30px; color: var(--dim); margin-top: 8px; }
+  #screen { left: 208px; top: 196px; width: 1504px; height: 846px; border-radius: 18px; overflow: hidden;
+    border: 2px solid rgba(255,255,255,.18); box-shadow: 0 40px 120px rgba(0,0,0,.7), 0 0 0 10px rgba(255,138,61,.07); }
+  #screen img { width: 1504px; height: 846px; display: block; position: absolute; left: 0; top: 0; }
+  #chipL { left: 250px; top: 960px; padding: 14px 26px; border-radius: 12px; font-size: 30px; font-weight: 700;
+    background: rgba(7,8,12,.88); border-left: 6px solid var(--cy); opacity: 0; }
+  #chipL small { color: var(--dim); font-weight: 400; margin-left: 10px; font-size: 24px; }
+  #live { right: 210px; top: 150px; font-size: 20px; letter-spacing: .2em; padding: 8px 16px; border-radius: 8px;
+    background: rgba(7,8,12,.85); color: #8ff0b6; opacity: 0; }
+
+  /* casco a pantalla completa */
+  #helmet { inset: 0; }
+  #helmet img { width: 1920px; height: 1080px; display: block; position: absolute; left: 0; top: 0; }
+  #hBand { left: 0; right: 0; top: 0; height: 340px; background: linear-gradient(180deg, rgba(7,8,12,.97) 0%, rgba(7,8,12,.9) 55%, rgba(7,8,12,0)); }
+  #hCap { left: 110px; top: 50px; }
+  #hCap .sub { font-size: 28px; color: var(--dim); margin-top: 8px; }
+
+  /* etiquetas de honestidad */
+  #h7 { left: 0; right: 0; top: 220px; text-align: center; }
+  #tags { left: 160px; right: 160px; top: 520px; display: flex; gap: 40px; justify-content: center; }
+  .tg { width: 370px; text-align: center; }
+  .tg .pill { display: inline-block; font-size: 40px; font-weight: 700; padding: 14px 30px; border-radius: 14px; border: 3px solid; }
+  .tg p { font-size: 28px; color: var(--dim); margin-top: 22px; }
+
+  /* cierre */
+  #endT { left: 0; right: 0; top: 300px; text-align: center; font-size: 150px; font-weight: 700; letter-spacing: .14em; }
+  #endS { left: 0; right: 0; top: 490px; text-align: center; font-size: 40px; color: var(--dim); }
+  #endU { left: 0; right: 0; top: 600px; text-align: center; font-size: 40px; }
+  #endU div { margin-bottom: 14px; }
+  /* video corto: sin tarjetas ni texto secundario; nombres de las fuentes bajo el resumen */
+  .d30 .card, .d30 #s7, .d30 #capS, .d30 #hS, .d30 #chipL { display: none; }
+  #sumSrc { display: none; font-size: 25px; letter-spacing: .08em; white-space: nowrap; color: var(--dim); margin-top: 26px; }
+  .d30 #sumSrc { display: block; }
+  #endN { left: 0; right: 0; top: 790px; text-align: center; font-size: 26px; letter-spacing: .2em; color: var(--dim); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <!-- paleta termica (frio violeta -> caliente amarillo) para la imagen de THEMIS -->
+  <filter id="heat"><feColorMatrix type="saturate" values="0"/>
+    <feComponentTransfer><feFuncR type="table" tableValues="0.05 0.45 0.85 0.99 1"/>
+      <feFuncG type="table" tableValues="0.02 0.05 0.3 0.65 0.98"/><feFuncB type="table" tableValues="0.2 0.5 0.35 0.1 0.6"/></feComponentTransfer></filter>
+</svg>
+
+<canvas id="stars" width="1920" height="1080"></canvas>
+<canvas id="globe" width="960" height="540"></canvas>
+
+<!-- 1 · titulo -->
+<div class="scene" id="s1">
+  <div class="abs kicker" id="kick1">NASA DATA · GALE CRATER · MARS</div>
+  <div class="abs" id="title"></div>
+  <div class="abs" id="tag1">Plan the walk. Weigh the risk. Walk on real data.</div>
+</div>
+
+<!-- 2 · del planeta al terreno -->
+<div class="scene" id="s2">
+  <div class="abs" id="ortho"></div>
+  <div class="abs" id="shade2"></div>
+  <div class="abs" id="ret"></div>
+  <div class="abs" id="retLbl">MOUNT SHARP · 2 × 2 KM · MRO HiRISE</div>
+  <div class="abs" id="lines2">
+    <div class="big">One astronaut.</div>
+    <div class="big">Two kilometres.</div>
+    <div class="big or">Zero room for error.</div>
+  </div>
+</div>
+
+<!-- 3 · satelites -->
+<div class="scene" id="s3">
+  <svg class="abs" id="orbits" width="1920" height="1080"></svg>
+  <div class="abs kicker" id="head3">BUILT ON REAL NASA DATA</div>
+  <div class="abs" id="chips">
+    <div class="chip"><b>2</b>satellites</div><div class="chip"><b>1</b>rover</div><div class="chip"><b>1</b>NASA database</div>
+  </div>
+  <div class="abs card" id="c1">
+    <div class="who">MARS RECONNAISSANCE ORBITER · HiRISE</div>
+    <h2>The ground, to the metre</h2>
+    <div class="row"><div>
+      <div class="stat"><div class="num" data-n="1048576">0</div><div class="lab">elevation points<small>1 m terrain model · relief, slope, roughness</small></div></div>
+      <div class="stat"><div class="num" data-n="16.8" data-d="1" data-s=" M">0</div><div class="lab">orthophoto pixels<small>25 cm per pixel</small></div></div>
+      <span class="tagObs">OBSERVATION</span>
+    </div><img class="thumb" src="../public/data/slope.png" style="filter: sepia(1) saturate(2.5) hue-rotate(-15deg)"></div>
+  </div>
+  <div class="abs card" id="c2">
+    <div class="who">MARS ODYSSEY · THEMIS</div>
+    <h2>Rock or loose sand?</h2>
+    <div class="row"><div>
+      <div class="stat"><div class="num" data-n="2">0</div><div class="lab">thermal mosaics<small>day and night infrared</small></div></div>
+      <div class="stat"><div class="lab" style="font-size:34px; max-width: 470px">Warm at night = <span class="or">solid rock</span>.<small>Cold = loose material. Safer footing, better samples.</small></div></div>
+      <span class="tagObs">OBSERVATION</span>
+    </div><img class="thumb" src="../public/data/thermal_night.png" style="filter:url(#heat)"></div>
+  </div>
+  <div class="abs card" id="c3">
+    <div class="who">CURIOSITY ROVER · ON THE GROUND</div>
+    <h2>What it is really like</h2>
+    <div class="row"><div>
+      <div class="stat"><div class="num" data-n="90">0</div><div class="lab">sols of weather<small>REMS · temperature, pressure, UV</small></div></div>
+      <div class="row" style="gap:50px">
+        <div class="stat"><div class="num" data-n="10">0</div><div class="lab">Navcam photos</div></div>
+        <div class="stat"><div class="num" data-n="150">0</div><div class="lab">traverse points</div></div>
+      </div>
+      <span class="tagObs">OBSERVATION</span> <span class="tagObs">+ RAD RADIATION DOSE</span>
+    </div><img class="thumb" src="../public/data/pov/S4_NRB_827075801EDR_F1210360NCAM00385M_.jpg"></div>
+  </div>
+  <div class="abs card" id="c4">
+    <div class="who">NASA DONKI · SPACE WEATHER</div>
+    <h2>When the Sun gets angry</h2>
+    <div class="stat"><div class="num" data-n="33" style="font-size:150px">0</div><div class="lab">solar activity notices<small>flares and solar particle events, feeding the radiation risk</small></div></div>
+    <span class="tagObs">OBSERVATION</span>
+  </div>
+  <div class="abs" id="sum">
+    <div class="kicker">ALL IN ONE 3D MAP</div>
+    <div class="big"><span class="cy">8</span> datasets</div>
+    <div class="big"><span class="cy">22</span> MB</div>
+    <div class="big or">One walk.</div>
+    <div id="sumSrc">MRO HiRISE · MARS ODYSSEY THEMIS · CURIOSITY · NASA DONKI</div>
+  </div>
+</div>
+
+<!-- 4-5 · la app -->
+<div class="scene" id="sApp">
+  <div class="abs" id="cap"><div class="mid" id="capT"></div><div class="sub" id="capS"></div></div>
+  <div class="abs" id="screen"><img id="clip" alt=""><img id="clip2" alt=""></div>
+  <div class="abs" id="live">● LIVE APP · REAL DATA</div>
+  <div class="abs" id="chipL"></div>
+</div>
+
+<!-- 6 · casco -->
+<div class="scene" id="sHelm">
+  <div class="abs" id="helmet"><img id="hclip" alt=""><img id="hclip2" alt=""></div>
+  <div class="abs" id="hBand"></div>
+  <div class="abs" id="hCap"><div class="mid" id="hT"></div><div class="sub" id="hS"></div></div>
+</div>
+
+<!-- 7 · etiquetas -->
+<div class="scene" id="s7">
+  <div class="abs" id="h7"><div class="kicker">NO GUESSWORK DRESSED AS DATA</div><div class="big" style="margin-top:20px">Real data. Clearly labelled.</div></div>
+  <div class="abs" id="tags">
+    <div class="tg"><span class="pill" style="color:#3ecf7a">Observation</span><p>measured by NASA</p></div>
+    <div class="tg"><span class="pill" style="color:var(--cy)">Derived</span><p>computed from it</p></div>
+    <div class="tg"><span class="pill" style="color:#f2d933">Model</span><p>estimated: oxygen, time</p></div>
+    <div class="tg"><span class="pill" style="color:var(--or)">Simulated</span><p>demo only: health, alert</p></div>
+  </div>
+</div>
+
+<!-- 8 · cierre -->
+<div class="scene" id="s8">
+  <div class="abs" id="endT"><span>MARSWALK</span> <span class="or">GALE</span></div>
+  <div class="abs" id="endS">Plan the walk. Weigh the risk. Walk on real data.</div>
+  <div class="abs" id="endU">
+    <div class="cy">danielortiz-create.github.io/marswalk-gale</div>
+    <div style="color:var(--dim); font-size:32px">github.com/danielortiz-create/marswalk-gale</div>
+  </div>
+  <div class="abs" id="endN">MRO · MARS ODYSSEY · CURIOSITY · DONKI</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const cl = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lin = (t, a, b) => cl((t - a) / (b - a));                    // 0..1 entre a y b
+const eo = (u) => 1 - Math.pow(1 - u, 3);                           // frena al final
+const ei = (u) => u * u * u;                                        // acelera
+const eio = (u) => u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+const mix = (a, b, u) => a + (b - a) * u;
+// opacidad de algo visible entre a y b, con entrada y salida suaves
+const win = (t, a, b, fi = .35, fo = .35) => Math.min(lin(t, a, a + fi), 1 - lin(t, b - fo, b));
+const css = (el, o) => Object.assign((typeof el === 'string' ? $(el) : el).style, o);
+
+// ---------- titulo letra a letra ----------
+'MARSWALK GALE'.split('').forEach((c, i) => {
+  const s = document.createElement('span'); s.textContent = c === ' ' ? ' ' : c;
+  if (i > 8) s.style.color = 'var(--or)'; $('title').appendChild(s);
+});
+
+// ---------- estrellas ----------
+(function () {
+  const g = $('stars').getContext('2d'); let r = 7;
+  const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 700; i++) {
+    g.globalAlpha = .2 + rnd() * .7; g.fillStyle = rnd() < .1 ? '#ffd7b0' : '#fff';
+    g.beginPath(); g.arc(rnd() * 1920, rnd() * 1080, rnd() * 1.4 + .2, 0, 7); g.fill();
+  }
+})();
+
+// ---------- planeta Marte procedimental (textura de ruido, no es un mapa real) ----------
+const TW = 1024, TH = 512, TEX = new Float32Array(TW * TH * 3);
+(function () {
+  const P = new Uint8Array(512); let r = 11;
+  for (let i = 0; i < 256; i++) P[i] = i;
+  for (let i = 255; i > 0; i--) { r = (r * 16807) % 2147483647; const j = r % (i + 1); [P[i], P[j]] = [P[j], P[i]]; }
+  for (let i = 0; i < 256; i++) P[i + 256] = P[i];
+  const h = (x, y, z) => P[P[P[x & 255] + (y & 255)] + (z & 255)] / 255;
+  const sm = (u) => u * u * (3 - 2 * u);
+  function vn(x, y, z) {
+    const X = Math.floor(x), Y = Math.floor(y), Z = Math.floor(z), u = sm(x - X), v = sm(y - Y), w = sm(z - Z);
+    const l = (a, b, t) => a + (b - a) * t;
+    return l(l(l(h(X, Y, Z), h(X + 1, Y, Z), u), l(h(X, Y + 1, Z), h(X + 1, Y + 1, Z), u), v),
+             l(l(h(X, Y, Z + 1), h(X + 1, Y, Z + 1), u), l(h(X, Y + 1, Z + 1), h(X + 1, Y + 1, Z + 1), u), v), w);
+  }
+  const C = [[70, 28, 14], [150, 62, 30], [196, 98, 52], [226, 146, 92]];
+  for (let j = 0; j < TH; j++) {
+    const lat = (0.5 - (j + .5) / TH) * Math.PI;
+    for (let i = 0; i < TW; i++) {
+      const lon = ((i + .5) / TW) * 2 * Math.PI - Math.PI;
+      const x = Math.cos(lat) * Math.sin(lon), y = Math.sin(lat), z = Math.cos(lat) * Math.cos(lon);
+      let n = 0, a = .5, f = 1.6;
+      for (let o = 0; o < 6; o++) { n += a * vn(x * f + 10, y * f + 20, z * f + 30); a *= .5; f *= 2.1; }
+      let v = cl((n - .25) * 1.8);                              // 0 oscuro .. 1 claro
+      const k = v * 3, c0 = C[Math.min(2, Math.floor(k))], c1 = C[Math.min(3, Math.floor(k) + 1)], u = k - Math.floor(k);
+      let R = mix(c0[0], c1[0], u), G = mix(c0[1], c1[1], u), B = mix(c0[2], c1[2], u);
+      const cap = cl((Math.abs(lat) - 1.22) * 6 + (vn(x * 6, y * 6, z * 6) - .5) * 1.5);   // casquetes polares
+      R = mix(R, 238, cap); G = mix(G, 228, cap); B = mix(B, 222, cap);
+      const o = (j * TW + i) * 3; TEX[o] = R; TEX[o + 1] = G; TEX[o + 2] = B;
+    }
+  }
+  // crateres: hoyos oscuros con borde claro
+  for (let c = 0; c < 140; c++) {
+    r = (r * 16807) % 2147483647; const cx = r % TW; r = (r * 16807) % 2147483647; const cy = 40 + r % (TH - 80);
+    r = (r * 16807) % 2147483647; const rad = 2 + Math.pow((r % 1000) / 1000, 3) * 26;
+    for (let dy = -rad * 1.3; dy <= rad * 1.3; dy++) for (let dx = -rad * 1.3; dx <= rad * 1.3; dx++) {
+      const d = Math.hypot(dx, dy) / rad; if (d > 1.3) continue;
+      const k = d < .85 ? -.22 * (1 - d * d) : d < 1.05 ? .18 : .08 * (1.3 - d) / .25;
+      const o = (((cy + dy) | 0) * TW + (((cx + dx) | 0) + TW) % TW) * 3;
+      if (o < 0 || o >= TEX.length) continue;
+      TEX[o] *= 1 + k; TEX[o + 1] *= 1 + k; TEX[o + 2] *= 1 + k;
+    }
+  }
+})();
+const GALE = { lat: -5.4 * Math.PI / 180, lon: 137.8 * Math.PI / 180 };
+const gctx = $('globe').getContext('2d'), gimg = gctx.createImageData(960, 540);
+// dibuja la esfera: centro y radio en pixeles de 1920x1080; lon/lat = punto que mira de frente
+function globe(cx, cy, R, lon0, lat0, alpha, marker) {
+  const D = gimg.data; D.fill(0);
+  cx /= 2; cy /= 2; R /= 2;
+  const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(959, Math.ceil(cx + R));
+  const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(539, Math.ceil(cy + R));
+  const ca = Math.cos(lat0), sa = Math.sin(lat0), L = [-.55, .5, .67];
+  for (let py = y0; py <= y1; py++) for (let px = x0; px <= x1; px++) {
+    const dx = (px + .5 - cx) / R, dy = -(py + .5 - cy) / R, d2 = dx * dx + dy * dy;
+    if (d2 > 1) continue;
+    const dz = Math.sqrt(1 - d2);
+    const y1b = dy * ca + dz * sa, z1 = -dy * sa + dz * ca;
+    const lat = Math.asin(cl(y1b, -1, 1)); let lon = Math.atan2(dx, z1) + lon0;
+    let u = (lon / (2 * Math.PI) + .5) % 1; if (u < 0) u += 1;
+    const ti = (Math.min(TH - 1, Math.floor((.5 - lat / Math.PI) * TH)) * TW + Math.floor(u * TW)) * 3;
+    const lit = .07 + 1.05 * Math.pow(Math.max(0, dx * L[0] + dy * L[1] + dz * L[2]), .85);
+    const haze = Math.pow(1 - dz, 3) * .9;
+    const o = (py * 960 + px) * 4, edge = cl((1 - Math.sqrt(d2)) * R * 1.5);
+    D[o] = TEX[ti] * lit + 255 * haze * .55; D[o + 1] = TEX[ti + 1] * lit + 150 * haze * .55; D[o + 2] = TEX[ti + 2] * lit + 90 * haze * .55;
+    D[o + 3] = 255 * alpha * edge;
+  }
+  gctx.putImageData(gimg, 0, 0);
+  // brillo de atmosfera alrededor
+  const g = gctx.createRadialGradient(cx, cy, R * .96, cx, cy, R * 1.12);
+  g.addColorStop(0, `rgba(255,140,80,${.35 * alpha})`); g.addColorStop(1, 'rgba(255,140,80,0)');
+  gctx.fillStyle = g; gctx.beginPath(); gctx.arc(cx, cy, R * 1.12, 0, 2 * Math.PI); gctx.moveTo(cx + R * .96, cy); gctx.arc(cx, cy, R * .96, 0, 2 * Math.PI); gctx.fill('evenodd');
+  if (marker > 0) {                                     // punto de Gale (si mira hacia la camara)
+    const cl2 = Math.cos(GALE.lat), dl = GALE.lon - lon0;
+    const X = cl2 * Math.sin(dl), Yb = Math.sin(GALE.lat), Zb = cl2 * Math.cos(dl);
+    const Y = Yb * ca - Zb * sa, Z = Yb * sa + Zb * ca;
+    if (Z > 0) {
+      const mx = cx + X * R, my = cy - Y * R;
+      gctx.strokeStyle = `rgba(79,216,255,${marker})`; gctx.lineWidth = 2;
+      gctx.beginPath(); gctx.arc(mx, my, 7 + 3 * Math.sin(T * 6), 0, 7); gctx.stroke();
+      gctx.fillStyle = `rgba(79,216,255,${marker})`; gctx.beginPath(); gctx.arc(mx, my, 3, 0, 7); gctx.fill();
+      return [mx * 2, my * 2];
+    }
+  }
+  return null;
+}
+
+// ---------- satelites ----------
+const NS = 'http://www.w3.org/2000/svg';
+const sv = (tag, at) => { const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); $('orbits').appendChild(e); return e; };
+const G3 = { x: 430, y: 610, R: 220 };
+const ORB = [
+  { name: 'MRO', rx: 330, ry: 92, rot: -18, w: .9, ph: 0, card: 'c1' },
+  { name: 'MARS ODYSSEY', rx: 410, ry: 140, rot: 22, w: .6, ph: 2, card: 'c2' },
+];
+ORB.forEach((o) => {
+  o.ell = sv('ellipse', { cx: G3.x, cy: G3.y, rx: o.rx, ry: o.ry, transform: `rotate(${o.rot} ${G3.x} ${G3.y})`, fill: 'none', stroke: 'rgba(79,216,255,.35)', 'stroke-width': 2, 'stroke-dasharray': '6 8' });
+  o.glow = sv('circle', { r: 26, fill: 'rgba(79,216,255,.18)' });
+  o.dot = sv('circle', { r: 10, fill: '#4fd8ff' });
+  o.lbl = sv('text', { class: 'satLbl' }); o.lbl.textContent = o.name;
+});
+const roverLbl = sv('text', { class: 'satLbl' }); roverLbl.textContent = 'CURIOSITY';
+const sun = sv('circle', { cx: 60, cy: 90, r: 120, fill: 'url(#sunG)' });
+const defs = document.createElementNS(NS, 'defs'); defs.innerHTML = '<radialGradient id="sunG"><stop offset="0" stop-color="#fff3c4"/><stop offset=".35" stop-color="#ffb347" stop-opacity=".8"/><stop offset="1" stop-color="#ff7a1a" stop-opacity="0"/></radialGradient>';
+$('orbits').prepend(defs);
+const sunLbl = sv('text', { class: 'satLbl', x: 150, y: 120 }); sunLbl.textContent = 'NASA DONKI · SPACE WEATHER';
+
+// contador animado
+function counters(card, t0, t) {
+  $(card).querySelectorAll('.num[data-n]').forEach((el, i) => {
+    const n = +el.dataset.n, d = +(el.dataset.d || 0), u = eo(lin(t, t0 + .15 + i * .25, t0 + 1.35 + i * .25));
+    el.textContent = (n * u).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) + (el.dataset.s || '');
+  });
+}
+
+// ---------- clips de la app ----------
+async function setImg(img, src) {
+  if (img.getAttribute('src') !== src) { img.src = src; try { await img.decode(); } catch (e) {} }
+}
+const frame = (n, s) => `clips/${n}/f${String(Math.max(0, s)).padStart(4, '0')}.jpg`;
+const NCLIP = { plan: 150, science: 90, helmet: 195 };
+
+// ---------- version de 30 s (?d=30) ----------
+// Cada tramo del video corto usa un tramo del de 60 s: [inicio30, fin30, inicio60, fin60].
+// Casi sin acelerar: se saltan las tarjetas de datos, la escena de ciencia y la de etiquetas para que todo se pueda leer.
+const D30 = new URLSearchParams(location.search).get('d') === '30';
+const TL = [[0, 4.5, 0, 5], [4.5, 6.5, 5, 7.5], [6.5, 9, 7.5, 10], [9, 10.2, 10, 11.4], [10.2, 14.5, 21.05, 22.35],
+            [14.5, 20.5, 22.35, 32], [20.5, 26.5, 38, 50], [26.5, 29.6, 55, 57.6], [29.6, 30, 59.4, 60]];
+const to60 = (t) => { const s = TL.find((q) => t < q[1]) || TL[TL.length - 1]; return s[2] + (t - s[0]) * (s[3] - s[2]) / (s[1] - s[0]); };
+if (D30) document.body.classList.add('d30');
+NCLIP.helmet30 = 98;
+
+// Muestra el clip en el segundo ct fundiendo dos fotogramas seguidos (los clips van a 15 fps y el video a 30),
+// y con un fundido mas largo cuando se enciende o apaga una capa, para que no haya saltos bruscos.
+const CORTES = { plan: [3.4, 6.8], helmet30: [3.2, 5] };
+async function clipAt(a, b, name, ct) {
+  const n = NCLIP[name], f = cl(ct * 15, 0, n - 1), k = Math.floor(f);
+  const corte = (CORTES[name] || []).find((c) => ct >= c && ct < c + 0.45);
+  if (corte !== undefined) {                       // fundido del fotograma de antes del cambio al de despues
+    await Promise.all([setImg(a, frame(name, k)), setImg(b, frame(name, Math.round(corte * 15) - 1))]);
+    b.style.opacity = 1 - eio((ct - corte) / 0.45);
+  } else {
+    await Promise.all([setImg(a, frame(name, k)), setImg(b, frame(name, Math.min(n - 1, k + 1)))]);
+    // no mezclar con el fotograma de despues de un corte: ese cambio lo hace el fundido largo
+    const antesDeCorte = (CORTES[name] || []).some((c) => Math.round(c * 15) === k + 1);
+    b.style.opacity = antesDeCorte ? 0 : f - k;
+  }
+}
+
+let T = 0;
+async function seek(tIn) {
+  const t = D30 ? to60(tIn) : tIn;
+  T = t;
+  const tc = D30 ? tIn * 1.6 : t;              // reloj continuo para lo que se mueve (orbitas, estrellas): no salta entre tramos
+  // ===== planeta =====
+  let gl = 0, gx = 960, gy = 440, gR = 300, lon = 0, lat = 0, mk = 0;
+  if (t < 7.9) {
+    const k = lin(t, 0, 5.6);
+    lon = (137.8 - (1 - eo(k)) * 75) * Math.PI / 180; lat = mix(12, -5.4, eo(k)) * Math.PI / 180;
+    gl = Math.min(lin(t, 0, 1.2), 1 - lin(t, 7.2, 7.9));
+    const z = ei(lin(t, 5.1, 7.7));
+    gR = 300 * (1 + z * 14) * (1 + .03 * lin(t, 0, 5)); gy = mix(440, 540, eo(lin(t, 5, 6.3)));
+    mk = Math.min(lin(t, 5.2, 5.6), 1 - lin(t, 6.6, 7));
+  } else if (t > 9.8 && t < 22.4) {
+    gl = Math.min(lin(t, 9.9, 10.5), 1 - lin(t, 22, 22.4));
+    gx = G3.x; gy = G3.y; gR = G3.R * mix(.85, 1, eo(lin(t, 9.9, 10.8)));
+    lon = (130 + tc * 1.2) * Math.PI / 180; lat = 8 * Math.PI / 180; mk = D30 ? lin(tIn, 9.6, 10) : lin(t, 16.9, 17.3);
+  } else if (t > 54.6) {
+    gl = lin(t, 54.8, 56); gx = 960; gy = 1880 - eo(lin(t, 54.8, 57)) * 180; gR = 760;
+    lon = (100 + tc * 2) * Math.PI / 180; lat = -12 * Math.PI / 180;
+  }
+  const mpos = gl > 0 ? globe(gx, gy, gR, lon, lat, gl, mk) : (gctx.clearRect(0, 0, 960, 540), null);
+  css('stars', { opacity: t > 22.2 && t < 54.6 ? .25 : 1, transform: `translate(${-tc * 4}px,0)` });
+
+  // ===== 1 titulo =====
+  css('s1', { opacity: win(t, 0, 5.3, .3, .4) });
+  css('kick1', { opacity: lin(t, .5, 1.2), letterSpacing: mix(.6, .32, eo(lin(t, .5, 1.6))) + 'em' });
+  [...$('title').children].forEach((s, i) => {
+    const u = eo(lin(t, 1.2 + i * .07, 1.75 + i * .07));
+    css(s, { opacity: u, transform: `translateY(${(1 - u) * 60}px) scale(${mix(1.6, 1, u)})`, filter: `blur(${(1 - u) * 8}px)` });
+  });
+  css('tag1', { opacity: lin(t, 2.9, 3.5), transform: `translateY(${(1 - eo(lin(t, 2.9, 3.6))) * 20}px)` });
+
+  // ===== 2 del orbita al terreno =====
+  css('s2', { opacity: win(t, 6.9, 10.35, .6, .35) });
+  const zo = eo(lin(t, 6.9, 10.3));
+  css('ortho', { transform: `scale(${mix(2.6, 1.08, zo)})` });
+  [...$('lines2').children].forEach((d, i) => {
+    const u = eo(lin(t, 7.5 + i * .7, 8 + i * .7));
+    css(d, { opacity: u, transform: `translateX(${(1 - u) * -80}px)` });
+  });
+  const ru = eo(lin(t, 8.2, 8.8));
+  css('ret', { opacity: ru, transform: `scale(${mix(1.6, 1, ru)})` });
+  css('retLbl', { opacity: lin(t, 8.6, 9) });
+
+  // ===== 3 satelites y datos =====
+  css('s3', { opacity: win(t, 10, 22.35, .4, .35) });
+  css('head3', { opacity: lin(t, 10.2, 10.6) });
+  [...$('chips').children].forEach((c, i) => {
+    const u = eo(lin(t, 10.4 + i * .25, 10.8 + i * .25));
+    css(c, { opacity: u, transform: `translateY(${(1 - u) * 30}px)` });
+  });
+  const CARDS = [['c1', 11.4, 14.5], ['c2', 14.5, 17], ['c3', 17, 19.5], ['c4', 19.5, 21.1]];
+  let act = '';
+  CARDS.forEach(([id, a, b]) => {
+    const vi = win(t, a, b, .3, .25), sl = eo(lin(t, a, a + .45));
+    css(id, { opacity: vi, transform: `translateY(${(1 - sl) * 70}px) scale(${mix(.96, 1, sl)})` });
+    if (vi > .5) act = id;
+    counters(id, a, t);
+  });
+  const su = D30 ? win(tIn, 9.7, 14.5, .3, .35) : win(t, 21.1, 22.4, .3, .2);
+  css('sum', { opacity: su });
+  [...$('sum').children].forEach((d, i) => { const u = D30 ? eo(lin(tIn, 9.8 + i * .35, 10.3 + i * .35)) : eo(lin(t, 21.15 + i * .15, 21.5 + i * .15)); css(d, { transform: `translateY(${(1 - u) * 40}px)`, opacity: u }); });
+  ORB.forEach((o) => {
+    const a = o.ph + tc * o.w, r = o.rot * Math.PI / 180;
+    const ex = Math.cos(a) * o.rx, ey = Math.sin(a) * o.ry;
+    const x = G3.x + ex * Math.cos(r) - ey * Math.sin(r), y = G3.y + ex * Math.sin(r) + ey * Math.cos(r);
+    const on = D30 || act === o.card || act === '' && t < 11.4, pulse = on ? 1 + .25 * Math.sin(tc * 8) : .6;
+    o.dot.setAttribute('cx', x); o.dot.setAttribute('cy', y); o.dot.setAttribute('r', 10 * pulse);
+    o.glow.setAttribute('cx', x); o.glow.setAttribute('cy', y); o.glow.setAttribute('r', on ? 34 : 18);
+    o.glow.setAttribute('opacity', on ? 1 : .3);
+    o.lbl.setAttribute('x', x + 26); o.lbl.setAttribute('y', y - 18); o.lbl.setAttribute('opacity', on ? 1 : .35);
+    o.ell.setAttribute('stroke', on ? 'rgba(79,216,255,.7)' : 'rgba(79,216,255,.22)');
+  });
+  if (mpos) { roverLbl.setAttribute('x', mpos[0] + 22); roverLbl.setAttribute('y', mpos[1] + 8); }
+  roverLbl.setAttribute('opacity', mpos ? (D30 || act === 'c3' ? 1 : .35) : 0);
+  const sOn = D30 ? .6 : act === 'c4' ? 1 : .3;
+  sun.setAttribute('opacity', sOn); sun.setAttribute('r', 120 + (act === 'c4' ? 20 * Math.sin(tc * 5) : 0)); sunLbl.setAttribute('opacity', sOn);
+
+  // ===== 4-5 la app (planificador y ciencia) =====
+  const appO = D30 ? win(t, 22.35, 32, .45, .4) : win(t, 22.2, 38.3, .35, .3);
+  css('sApp', { opacity: appO });
+  if (appO > 0) {
+    let name, ct, zoom = 1, ox = 50, oy = 50;
+    if (t < 32) { name = 'plan'; ct = t - 22.1; }
+    else { name = 'science'; ct = t - 32.1; zoom = mix(1, 1.42, eio(lin(t, 33.4, 35.2))); ox = 100; oy = 72; }
+    await clipAt($('clip'), $('clip2'), name, ct);
+    const ent = eo(lin(t, 22.2, 23));
+    css('screen', { transform: `perspective(1800px) rotateX(${(1 - ent) * 14}deg) translateY(${(1 - ent) * 80}px) scale(${mix(.92, 1, ent)})` });
+    css('clip', { transformOrigin: `${ox}% ${oy}%`, transform: `scale(${zoom})` });
+    css('clip2', { transformOrigin: `${ox}% ${oy}%`, transform: `scale(${zoom})` });
+    css('live', { opacity: lin(t, 23, 23.4) });
+    // titulo arriba
+    const CAPS = D30 ? [[22.3, 32, 'Every layer. <span class="cy">The safest route.</span>', ''], [32, 33, '', ''], [33, 34, '', '']] : [[22.3, 27.7, 'Every layer in one view.', 'Slope, thermal, roughness, contours and walk-back time over the real terrain.'],
+                  [27.7, 32.05, 'The safest route, <span class="cy">automatically.</span>', 'Steep ground avoided. Oxygen, time and radiation budgeted. GO or NO-GO.'],
+                  [32.05, 38.3, 'A science goal at <span class="or">every stop.</span>', 'What to sample and why, next to the real Curiosity photo of that spot.']];
+    const c = CAPS.find((q) => t >= q[0] && t < q[1]) || CAPS[2];
+    if ($('capT').dataset.k !== c[2]) { $('capT').innerHTML = c[2]; $('capS').textContent = c[3]; $('capT').dataset.k = c[2]; }
+    const cu = eo(lin(t, c[0], c[0] + .4)), co = 1 - lin(t, c[1] - .2, c[1]);
+    css('cap', { opacity: Math.min(cu, c === CAPS[2] ? 1 : co), transform: `translateY(${(1 - cu) * 24}px)` });
+    // etiqueta de la capa encendida (sincronizada con el clip)
+    const LAY = [[22.4, 25.4, 'SLOPE', 'from the HiRISE terrain model'], [25.5, 28.8, 'THERMAL', 'Mars Odyssey THEMIS'],
+                 [28.9, 32, 'SAFEST ROUTE + GO', 'walk budget · model']];
+    const l = LAY.find((q) => t >= q[0] && t < q[1]);
+    if (l) { const k = l[2] + l[3]; if ($('chipL').dataset.k !== k) { $('chipL').innerHTML = `${l[2]}<small>${l[3]}</small>`; $('chipL').dataset.k = k; } }
+    css('chipL', { opacity: l ? win(t, l[0], l[1], .25, .2) : 0 });
+  }
+
+  // ===== 6 casco =====
+  const hO = D30 ? win(t, 38, 50, .8, .5) : win(t, 38, 50.3, .3, .3);
+  css('sHelm', { opacity: hO });
+  if (hO > 0) {
+    if (D30) await clipAt($('hclip'), $('hclip2'), 'helmet30', tIn - 20.5 + 0.6);   // se saltan los primeros 0,6 s del clip (la camara se esta colocando)
+    else await clipAt($('hclip'), $('hclip2'), 'helmet', t - 38);
+    css('helmet', { transform: `scale(${mix(1.08, 1, eo(lin(t, 38, 39.5)))})` });
+    const HC = D30 ? [[38.2, 43.2, 'TARS: an AI agent <span class="cy">on the suit.</span>', ''],
+                      [43.2, 50.3, 'Solar alert? <span class="or">It finds the way home.</span>', ''], [50.3, 51, '', '']] : [[38.2, 43.9, D30 ? 'TARS · an AI agent <span class="cy">on the suit.</span>' : 'TARS · an AI agent <span class="cy">on the suit,</span> not on Earth.', 'It watches oxygen, vitals and terrain, and talks to the astronaut. Simulated in this demo.'],
+                [43.9, 47.4, 'Solar alert. <span class="or">Return or continue?</span>', 'Minutes to the habitat and oxygen margin for each choice.'],
+                [47.4, 50.3, 'The way home, <span class="cy">drawn instantly.</span>', 'Fastest safe route back, on the visor and the minimap.']];
+    const c = HC.find((q) => t >= q[0] && t < q[1]) || HC[2];
+    if ($('hT').dataset.k !== c[2]) { $('hT').innerHTML = c[2]; $('hS').textContent = c[3]; $('hT').dataset.k = c[2]; }
+    const cu = eo(lin(t, c[0], c[0] + .4));
+    css('hCap', { opacity: Math.min(cu, 1 - lin(t, c[1] - .15, c[1])), transform: `translateY(${(1 - cu) * 24}px)` });
+  }
+
+  // ===== 7 etiquetas =====
+  css('s7', { opacity: win(t, 50, 55.2, .35, .35) });
+  css('h7', { opacity: eo(lin(t, 50.2, 50.7)), transform: `translateY(${(1 - eo(lin(t, 50.2, 50.8))) * 30}px)` });
+  [...$('tags').children].forEach((d, i) => {
+    const u = lin(t, 51.1 + i * .38, 51.6 + i * .38);
+    const b = u < 1 ? (1 - Math.pow(1 - u, 2)) : 1, bounce = Math.sin(u * Math.PI) * .08;
+    css(d, { opacity: u > 0 ? 1 : 0, transform: `translateY(${(1 - b) * -260}px) scale(${1 + bounce})` });
+  });
+
+  // ===== 8 cierre =====
+  css('s8', { opacity: Math.min(lin(t, 55, 55.5), 1 - lin(t, 59.4, 60)) });
+  const e1 = eo(lin(t, 55.3, 56.2));
+  css('endT', { opacity: e1, letterSpacing: mix(.4, .14, e1) + 'em', filter: `blur(${(1 - e1) * 10}px)` });
+  css('endS', { opacity: lin(t, 56, 56.6) });
+  css('endU', { opacity: lin(t, 56.6, 57.2), transform: `translateY(${(1 - eo(lin(t, 56.6, 57.3))) * 20}px)` });
+  css('endN', { opacity: lin(t, 57.2, 57.8) });
+  if (t > 59.4) css('globe', { opacity: 1 - lin(t, 59.4, 60) }); else css('globe', { opacity: 1 });
+  return true;
+}
+window.seek = seek;
+window.READY = Promise.all([...document.images].map((i) => i.decode().catch(() => {})));
+</script>
+</body>
+</html>
